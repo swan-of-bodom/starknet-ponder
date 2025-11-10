@@ -1,0 +1,130 @@
+import { EMPTY_LOG_FILTER } from "@/_test/constants.js";
+import type { LogFactory, LogFilter } from "@/internal/types.js";
+import type { Hex } from "starkweb2";
+import { expect, test } from "vitest";
+import { isFilterInBloom, isInBloom } from "./bloom.js";
+
+test("isInBloom", () => {
+  let bloom =
+    "0x00000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002020000000000000000000000000000000000000000000008000000001000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000" as Hex;
+
+  const address = "0xef2d6d194084c2de36e0dabfce45d046b37d1106";
+  let topic =
+    "0x02c69be41d0b7e40352fc85be1cd65eb03d40ef8427a0ca4596b1ead9a00e9fc" as Hex;
+
+  expect(isInBloom(bloom, address)).toBe(true);
+  expect(isInBloom(bloom, topic)).toBe(true);
+
+  bloom =
+    "0x00000000000000000000008000000000000000000000000000000000000000000000000000080000000000000000000000000000000000000000000000044000200000000000000000002000000000000000000000040000000000000000000000000000020000000000000000000800000000000800000000000800000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000808002000000000400000000000000000000000060000000000000000000000000000000000000000000000100000000000002000000" as Hex;
+
+  expect(isInBloom(bloom, address)).toBe(false);
+  expect(isInBloom(bloom, topic)).toBe(false);
+
+  topic =
+    "0x4a39dc06d4c0dbc64b70af90fd698a233a518aa5d07e595d983b8c0526c8f7fb" as Hex;
+
+  expect(isInBloom(bloom, topic)).toBe(true);
+});
+
+test("isFilterInBloom returns false for out of range blocks", () => {
+  const block = {
+    number: 5, // Starknet uses number, not hex
+  } as const;
+
+  const filter = {
+    ...EMPTY_LOG_FILTER,
+    fromBlock: 10,
+    toBlock: 20,
+  } satisfies LogFilter;
+
+  expect(isFilterInBloom({ block, filter })).toBe(false);
+});
+
+// Note: Starknet doesn't have logsBloom, so isFilterInBloom only checks block range
+// This test verifies that in-range blocks return true (no false negatives)
+test("isFilterInBloom returns true for in-range blocks (Starknet has no logsBloom)", () => {
+  const block = {
+    number: 5, // Starknet uses number, not hex
+  } as const;
+
+  const filter = {
+    ...EMPTY_LOG_FILTER,
+    topic0:
+      "0x02c69be41d0b7e40352fc85be1cd65eb03d40ef8427a0ca4596b1ead9a00e9fc",
+  } satisfies LogFilter;
+
+  // Starknet has no logsBloom, so all in-range blocks pass
+  expect(isFilterInBloom({ block, filter })).toBe(true);
+});
+
+test("isFilterInBloom returns true for undefined address", () => {
+  const block = {
+    number: 5, // Starknet uses number, not hex
+  } as const;
+
+  const filter = EMPTY_LOG_FILTER;
+
+  expect(isFilterInBloom({ block, filter })).toBe(true);
+});
+
+test("isFilterInBloom returns true for factory with new child address", () => {
+  const block = {
+    number: 5, // Starknet uses number, not hex
+  } as const;
+
+  const filter = {
+    ...EMPTY_LOG_FILTER,
+    address: {
+      id: `log_${"0xef2d6d194084c2de36e0dabfce45d046b37d1106"}_${1}_topic${1}_${"0x02c69be41d0b7e40352fc85be1cd65eb03d40ef8427a0ca4596b1ead9a00e9fc"}_${"undefined"}_${"undefined"}`,
+      type: "log",
+      chainId: 1,
+      address: "0xef2d6d194084c2de36e0dabfce45d046b37d1106",
+      eventSelector:
+        "0x02c69be41d0b7e40352fc85be1cd65eb03d40ef8427a0ca4596b1ead9a00e9fc",
+      childAddressLocation: "topic1",
+      fromBlock: undefined,
+      toBlock: undefined,
+    } satisfies LogFactory,
+  } satisfies LogFilter;
+
+  expect(isFilterInBloom({ block, filter })).toBe(true);
+});
+
+test("isFilterInBloom returns true for factory without new child address", () => {
+  const block = {
+    number: 5, // Starknet uses number, not hex
+  } as const;
+
+  const filter = {
+    ...EMPTY_LOG_FILTER,
+    address: {
+      id: `log_${"0xef2d6d194084c2de36e0dabfce45d046b37d1106"}_${1}_topic${1}_${"0x02c69be41d0b7e40352fc85be1cd65eb03d40ef8427a0ca4596b1ead9a00e9fc"}_${"undefined"}_${"undefined"}`,
+      type: "log",
+      chainId: 1,
+      address: "0xef2d6d194084c2de36e0dabfce45d046b37d1106",
+      eventSelector:
+        "0x02c69be41d0b7e40352fc85be1cd65eb03d40ef8427a0ca4596b1ead9a00e9fc",
+      childAddressLocation: "topic1",
+      fromBlock: undefined,
+      toBlock: undefined,
+    } satisfies LogFactory,
+    topic0:
+      "0x4a39dc06d4c0dbc64b70af90fd698a233a518aa5d07e595d983b8c0526c8f7fb",
+  } satisfies LogFilter;
+
+  expect(isFilterInBloom({ block, filter })).toBe(true);
+});
+
+test("isFilterInBloom returns true for array of addresses", () => {
+  const block = {
+    number: 5, // Starknet uses number, not hex
+  } as const;
+
+  const filter = {
+    ...EMPTY_LOG_FILTER,
+    address: ["0xef2d6d194084c2de36e0dabfce45d046b37d1106"],
+  } satisfies LogFilter;
+
+  expect(isFilterInBloom({ block, filter })).toBe(true);
+});

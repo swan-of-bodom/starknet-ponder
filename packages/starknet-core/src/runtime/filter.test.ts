@@ -1,0 +1,325 @@
+import { ALICE, BOB } from "@/_test/constants.js";
+import { setupAnvil, setupCommon } from "@/_test/setup.js";
+import {
+  createPair,
+  deployErc20,
+  deployFactory,
+  mintErc20,
+  transferErc20,
+  transferEth,
+} from "@/_test/simulate.js";
+import {
+  getAccountsIndexingBuild,
+  getBlocksIndexingBuild,
+  getChain,
+  getErc20IndexingBuild,
+  getPairWithFactoryIndexingBuild,
+} from "@/_test/utils.js";
+import type {
+  BlockFilter,
+  LogFactory,
+  SyncLog,
+  TransactionFilter,
+} from "@/internal/types.js";
+import { _starknet_getBlockByNumber } from "@/rpc/actions.js";
+import { createRpc } from "@/rpc/index.js";
+import { toHex64 } from "@/utils/hex.js";
+import { type Address, parseEther, zeroAddress, zeroHash } from "starkweb2";
+import { beforeEach, expect, test } from "vitest";
+import {
+  getChildAddress,
+  isBlockFilterMatched,
+  isLogFactoryMatched,
+  isLogFilterMatched,
+  isTraceFilterMatched,
+  isTransactionFilterMatched,
+  isTransferFilterMatched,
+} from "./filter.js";
+
+beforeEach(setupCommon);
+beforeEach(setupAnvil);
+
+test("getChildAddress() keys", () => {
+  const factory = {
+    type: "log",
+    childAddressLocation: "topic1",  // Still uses "topic1" naming for location
+  } as unknown as LogFactory;
+  const log = {
+    keys: [
+      "0x0099cd8bde557814842a3121e8ddfd433a539b8c9f14bf31ebf108d12e6196e9",  // Event selector
+      "0x000000000000000000000000a21a16ec22a940990922220e4ab5bf4c2310f556",  // Address in key[1]
+    ],
+  } as unknown as SyncLog;
+
+  // Starknet normalizes to 64-char hex
+  expect(getChildAddress({ log, factory })).toBe(
+    "0x000000000000000000000000a21a16ec22a940990922220e4ab5bf4c2310f556",
+  );
+});
+
+test("getChildAddress() offset", () => {
+  const factory = {
+    type: "log",
+    childAddressLocation: "offset32",
+  } as unknown as LogFactory;
+  const log = {
+    data: "0x0000000000000000000000000000000000000000000000000000000017d435c9000000000000000000000000a21a16ec22a940990922220e4ab5bf4c2310f556",
+  } as unknown as SyncLog;
+
+  expect(getChildAddress({ log, factory })).toBe(
+    "0xa21a16ec22a940990922220e4ab5bf4c2310f556",
+  );
+});
+
+test("isLogFactoryMatched()", async () => {
+  const { address } = await deployFactory({ sender: ALICE });
+  const blockData = await createPair({
+    factory: address,
+    sender: ALICE,
+  });
+
+  const { sources } = getPairWithFactoryIndexingBuild({
+    address,
+  });
+
+  const filter = sources[0]!.filter;
+
+  let isMatched = isLogFactoryMatched({
+    factory: filter.address,
+    log: blockData.log,
+  });
+  expect(isMatched).toBe(true);
+
+  filter.address.address = [filter.address.address as Address];
+
+  isMatched = isLogFactoryMatched({
+    factory: filter.address,
+    log: blockData.log,
+  });
+  expect(isMatched).toBe(true);
+
+  blockData.log.keys[0] = zeroHash;  // Starknet uses 'keys' instead of 'topics'
+
+  isMatched = isLogFactoryMatched({
+    factory: filter.address,
+    log: blockData.log,
+  });
+  expect(isMatched).toBe(false);
+});
+
+test("isLogFilterMatched()", async () => {
+  const { address } = await deployErc20({ sender: ALICE });
+  const blockData = await mintErc20({
+    erc20: address,
+    to: ALICE,
+    amount: parseEther("1"),
+    sender: ALICE,
+  });
+
+  const { sources } = getErc20IndexingBuild({
+    address,
+  });
+
+  const filter = sources[0]!.filter;
+
+  let isMatched = isLogFilterMatched({ filter, log: blockData.log });
+  expect(isMatched).toBe(true);
+
+  filter.topic0 = null;
+
+  isMatched = isLogFilterMatched({ filter, log: blockData.log });
+  expect(isMatched).toBe(true);
+
+  blockData.log.address = zeroAddress;
+
+  isMatched = isLogFilterMatched({ filter, log: blockData.log });
+  expect(isMatched).toBe(false);
+});
+
+test("isBlockFilterMatched", async (context) => {
+  const chain = getChain();
+  const rpc = createRpc({
+    chain,
+    common: context.common,
+  });
+
+  const { sources } = getBlocksIndexingBuild({
+    interval: 1,
+  });
+
+  const filter = sources[0]!.filter as BlockFilter;
+
+  const rpcBlock = await _starknet_getBlockByNumber(rpc, {
+    blockNumber: 0,
+  });
+
+  let isMatched = isBlockFilterMatched({
+    filter,
+    block: rpcBlock,
+  });
+  expect(isMatched).toBe(true);
+
+  filter.interval = 2;
+  filter.offset = 1;
+
+  isMatched = isBlockFilterMatched({
+    filter,
+    block: rpcBlock,
+  });
+  expect(isMatched).toBe(false);
+});
+
+test("isTransactionFilterMatched()", async (context) => {
+  // Use simulated data which returns proper Starknet transaction format
+  const { transaction, block } = await transferEth({
+    to: BOB,
+    amount: parseEther("1"),
+    sender: ALICE,
+  });
+
+  const { sources } = getAccountsIndexingBuild({
+    address: ALICE,
+  });
+
+  // transaction:from filter - matches on senderAddress for Starknet
+  const filter = sources[1]!.filter as TransactionFilter<undefined, undefined>;
+
+  let isMatched = isTransactionFilterMatched({
+    filter,
+    transaction,
+    blockNumber: block.number,
+  });
+  expect(isMatched).toBe(true);
+
+  // Modify senderAddress to not match
+  transaction.senderAddress = toHex64(zeroAddress) as any;
+
+  isMatched = isTransactionFilterMatched({
+    filter,
+    transaction,
+    blockNumber: block.number,
+  });
+  expect(isMatched).toBe(false);
+});
+
+// TODO: Skip - Starknet transactions don't have 'to' field
+test.skip("isTransactionFilterMatched() with null transaction.to", async (context) => {
+  const chain = getChain();
+  const rpc = createRpc({
+    chain,
+    common: context.common,
+  });
+
+  await transferEth({
+    to: BOB,
+    amount: parseEther("1"),
+    sender: ALICE,
+  });
+
+  const { sources } = getAccountsIndexingBuild({
+    address: ALICE,
+  });
+
+  // transaction:to
+  const filter = sources[1]!.filter as TransactionFilter<undefined, undefined>;
+  filter.toAddress = BOB.toLowerCase() as Address;
+
+  const rpcBlock = await _starknet_getBlockByNumber(rpc, {
+    blockNumber: 1,
+  });
+
+  let isMatched = isTransactionFilterMatched({
+    filter,
+    transaction: rpcBlock.transactions[0]!,
+  });
+  expect(isMatched).toBe(true);
+
+  rpcBlock.transactions[0]!.to = null;
+
+  isMatched = isTransactionFilterMatched({
+    filter,
+    transaction: rpcBlock.transactions[0]!,
+  });
+  expect(isMatched).toBe(false);
+});
+
+// TODO: Skip - uses EVM traces, trace functionality not yet implemented for Starknet
+test.skip("isTransferFilterMatched()", async () => {
+  const blockData = await transferEth({
+    to: BOB,
+    amount: parseEther("1"),
+    sender: ALICE,
+  });
+
+  const { sources } = getAccountsIndexingBuild({
+    address: ALICE,
+  });
+
+  // transfer:from
+  const filter = sources[3]!.filter;
+
+  let isMatched = isTransferFilterMatched({
+    filter,
+    block: blockData.block,
+    trace: blockData.trace.trace,
+  });
+  expect(isMatched).toBe(true);
+
+  blockData.trace.trace.value = "0x0";
+
+  isMatched = isTransferFilterMatched({
+    filter,
+    block: blockData.block,
+    trace: blockData.trace.trace,
+  });
+  expect(isMatched).toBe(false);
+});
+
+// TODO: Skip - uses EVM traces, Starknet has different trace format
+test.skip("isTraceFilterMatched()", async () => {
+  const { address } = await deployErc20({ sender: ALICE });
+  await mintErc20({
+    erc20: address,
+    to: ALICE,
+    amount: parseEther("1"),
+    sender: ALICE,
+  });
+  const blockData = await transferErc20({
+    erc20: address,
+    to: BOB,
+    amount: parseEther("1"),
+    sender: ALICE,
+  });
+
+  const { sources } = getErc20IndexingBuild({
+    address,
+    includeCallTraces: true,
+  });
+
+  const filter = sources[0]!.filter;
+
+  let isMatched = isTraceFilterMatched({
+    filter,
+    block: blockData.block,
+    trace: blockData.trace.trace,
+  });
+  expect(isMatched).toBe(true);
+
+  filter.functionSelector = undefined;
+
+  isMatched = isTraceFilterMatched({
+    filter,
+    block: blockData.block,
+    trace: blockData.trace.trace,
+  });
+  expect(isMatched).toBe(true);
+
+  blockData.trace.trace.to = zeroAddress;
+
+  isMatched = isTraceFilterMatched({
+    filter,
+    block: blockData.block,
+    trace: blockData.trace.trace,
+  });
+  expect(isMatched).toBe(false);
+});

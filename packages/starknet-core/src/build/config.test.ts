@@ -1,0 +1,1051 @@
+import { setupAnvil, setupCommon } from "@/_test/setup.js";
+import { getDevnetUrl } from "@/_test/utils.js";
+import { factory } from "@/config/address.js";
+import { createConfig } from "@/config/index.js";
+import type { LogFactory, LogFilter, TraceFilter } from "@/internal/types.js";
+import { computeEventSelector } from "@/utils/event-selector.js";
+import { type Address, zeroAddress } from "starkweb2";
+import { beforeEach, expect, test } from "vitest";
+import {
+  buildConfig,
+  buildIndexingFunctions,
+  safeBuildConfig,
+  safeBuildIndexingFunctions,
+} from "./config.js";
+
+beforeEach(setupCommon);
+beforeEach(setupAnvil);
+
+const event0 = {
+  type: "event",
+  name: "Event0",
+  kind: "struct",
+  members: [{ name: "arg", type: "felt252", kind: "key" }],
+} as const;
+
+const event1 = {
+  type: "event",
+  name: "Event1",
+  kind: "struct",
+  members: [],
+} as const;
+
+const event1Overloaded = {
+  type: "event",
+  name: "Event1",
+  kind: "struct",
+  members: [{ name: "arg", type: "felt252", kind: "key" }],
+} as const;
+
+const eventFactory = {
+  type: "event",
+  name: "EventFactory",
+  inputs: [
+    {
+      name: "child",
+      type: "core::starknet::contract_address::ContractAddress",
+      indexed: true,
+    },
+  ],
+} as const;
+
+const func0 = {
+  type: "function",
+  name: "func0",
+  inputs: [
+    { name: "addr", type: "core::starknet::contract_address::ContractAddress" },
+  ],
+  outputs: [{ type: "core::integer::u256" }],
+  state_mutability: "view",
+} as const;
+
+const address1 =
+  "0x0000000000000000000000000000000000000000000000000000000000000001";
+const address2 =
+  "0x0000000000000000000000000000000000000000000000000000000000000001";
+const address3 =
+  "0x0000000000000000000000000000000000000000000000000000000000000003";
+const bytes1 =
+  "0x0000000000000000000000000000000000000000000000000000000000000001";
+const bytes2 =
+  "0x0000000000000000000000000000000000000000000000000000000000000002";
+
+test("buildIndexingFunctions() builds topics for multiple events", async (context) => {
+  const config = createConfig({
+    chains: {
+      mainnet: { id: 1, rpc: getDevnetUrl() },
+    },
+    contracts: {
+      a: {
+        chain: "mainnet",
+        abi: [event0, event1],
+        address: address1,
+        startBlock: 0,
+        endBlock: 100,
+      },
+    },
+  });
+
+  const configBuild = buildConfig({
+    common: context.common,
+    config,
+  });
+
+  const { sources } = await buildIndexingFunctions({
+    common: context.common,
+    config,
+    rawIndexingFunctions: [
+      { name: "a:Event0", fn: () => {} },
+      { name: "a:Event1", fn: () => {} },
+    ],
+    configBuild,
+  });
+
+  expect((sources[0]!.filter as LogFilter).topic0).toMatchObject([
+    computeEventSelector(event0.name),
+    computeEventSelector(event1.name),
+  ]);
+});
+
+test("buildIndexingFunctions() handles overloaded event signatures and combines topics", async (context) => {
+  const config = createConfig({
+    chains: {
+      mainnet: { id: 1, rpc: getDevnetUrl() },
+    },
+    contracts: {
+      a: {
+        chain: "mainnet",
+        abi: [event1, event1Overloaded],
+        address: address1,
+        startBlock: 0,
+        endBlock: 100,
+      },
+    },
+  });
+
+  const configBuild = buildConfig({
+    common: context.common,
+    config,
+  });
+  const { sources } = await buildIndexingFunctions({
+    common: context.common,
+    config,
+    rawIndexingFunctions: [
+      // Cairo just use event name without type signature
+      { name: "a:Event1", fn: () => {} },
+    ],
+    configBuild,
+  });
+
+  expect((sources[0]!.filter as LogFilter).topic0).toMatchObject([
+    computeEventSelector(event1.name),
+  ]);
+});
+
+test("buildIndexingFunctions() handles multiple addresses", async (context) => {
+  const config = createConfig({
+    chains: {
+      mainnet: { id: 1, rpc: getDevnetUrl() },
+    },
+    contracts: {
+      a: {
+        chain: {
+          mainnet: {
+            address: [address1, address3],
+            startBlock: 0,
+            endBlock: 100,
+          },
+        },
+        abi: [event1, event1Overloaded],
+      },
+    },
+  });
+
+  const configBuild = buildConfig({
+    common: context.common,
+    config,
+  });
+  const { sources } = await buildIndexingFunctions({
+    common: context.common,
+    config,
+    rawIndexingFunctions: [
+      // Cairo just use event name without type signature
+      { name: "a:Event1", fn: () => {} },
+    ],
+    configBuild,
+  });
+
+  // Both overloaded events have the same name, so same selector
+  expect((sources[0]!.filter as LogFilter).topic0).toMatchObject([
+    computeEventSelector(event1.name),
+  ]);
+});
+
+test("buildIndexingFunctions() creates a source for each chain for multi-chain contracts", async (context) => {
+  const config = createConfig({
+    chains: {
+      mainnet: { id: 1, rpc: getDevnetUrl() },
+      optimism: { id: 10, rpc: getDevnetUrl() },
+    },
+    contracts: {
+      a: {
+        chain: { mainnet: {}, optimism: {} },
+        abi: [event0],
+      },
+    },
+  });
+
+  const configBuild = buildConfig({
+    common: context.common,
+    config,
+  });
+  const { sources } = await buildIndexingFunctions({
+    common: context.common,
+    config,
+    rawIndexingFunctions: [{ name: "a:Event0", fn: () => {} }],
+    configBuild,
+  });
+
+  expect(sources.length).toBe(2);
+});
+
+test("buildIndexingFunctions() throw useful error for common 0.11 migration mistakes", async (context) => {
+  const rawIndexingFunctions = [{ name: "a:Event0", fn: () => {} }];
+
+  const config = createConfig({
+    chains: {
+      mainnet: { id: 1, rpc: getDevnetUrl() },
+      optimism: { id: 10, rpc: getDevnetUrl() },
+    },
+    contracts: {
+      a: {
+        // @ts-expect-error
+        network: { mainnet: {}, optimism: {} },
+        abi: [event0],
+      },
+    },
+  });
+
+  const configBuild = buildConfig({
+    common: context.common,
+    // @ts-expect-error
+    config,
+  });
+
+  const result = await safeBuildIndexingFunctions({
+    common: context.common,
+    // @ts-expect-error
+    config,
+    rawIndexingFunctions,
+    configBuild,
+  });
+
+  expect(result.status).toBe("error");
+  expect(result.error?.message).toBe(
+    "Validation failed: Chain for 'a' is null or undefined. Expected one of ['mainnet', 'optimism']. Did you forget to change 'network' to 'chain' when migrating to 0.11?",
+  );
+});
+
+test("buildIndexingFunctions() builds topics for event filter", async (context) => {
+  const config = createConfig({
+    chains: {
+      mainnet: { id: 1, rpc: getDevnetUrl() },
+    },
+    contracts: {
+      a: {
+        chain: { mainnet: {} },
+        abi: [event0],
+        filter: {
+          event: "Event0",
+          args: {
+            arg: bytes1,
+          },
+        },
+        address: address1,
+        startBlock: 0,
+        endBlock: 100,
+      },
+    },
+  });
+
+  const configBuild = buildConfig({
+    common: context.common,
+    // @ts-ignore
+    config,
+  });
+  const { sources } = await buildIndexingFunctions({
+    common: context.common,
+    // @ts-ignore
+    config,
+    rawIndexingFunctions: [{ name: "a:Event0", fn: () => {} }],
+    configBuild,
+  });
+
+  expect(sources).toHaveLength(1);
+  expect((sources[0]!.filter as LogFilter).topic0).toMatchObject(
+    computeEventSelector(event0.name),
+  );
+  expect((sources[0]!.filter as LogFilter).topic1).toMatchObject(bytes1);
+});
+
+test("buildIndexingFunctions() builds topics for multiple event filters", async (context) => {
+  const config = createConfig({
+    chains: {
+      mainnet: { id: 1, rpc: getDevnetUrl() },
+    },
+    contracts: {
+      a: {
+        chain: { mainnet: {} },
+        abi: [event0, event1Overloaded],
+        filter: [
+          {
+            event: "Event1",
+            // @ts-ignore
+            args: [[bytes1, bytes2]],
+          },
+          {
+            event: "Event0",
+            args: {
+              arg: bytes1,
+            },
+          },
+        ],
+        address: address1,
+        startBlock: 0,
+        endBlock: 100,
+      },
+    },
+  });
+
+  const configBuild = buildConfig({
+    common: context.common,
+    // @ts-ignore
+    config,
+  });
+  const { sources } = await buildIndexingFunctions({
+    common: context.common,
+    // @ts-ignore
+    config,
+    rawIndexingFunctions: [
+      { name: "a:Event0", fn: () => {} },
+      { name: "a:Event1", fn: () => {} },
+    ],
+    configBuild,
+  });
+
+  expect(sources).toHaveLength(2);
+  expect((sources[0]!.filter as LogFilter).topic0).toMatchObject(
+    computeEventSelector(event1Overloaded.name),
+  );
+  expect((sources[0]!.filter as LogFilter).topic1).toMatchObject([
+    bytes1,
+    bytes2,
+  ]);
+  expect((sources[1]!.filter as LogFilter).topic0).toMatchObject(
+    computeEventSelector(event0.name),
+  );
+  expect((sources[1]!.filter as LogFilter).topic1).toMatchObject(bytes1);
+});
+
+test("buildIndexingFunctions() overrides default values with chain-specific values", async (context) => {
+  const config = createConfig({
+    chains: {
+      mainnet: { id: 1, rpc: getDevnetUrl() },
+    },
+    contracts: {
+      a: {
+        abi: [event0],
+        address: address1,
+        startBlock: 0,
+        endBlock: 100,
+        chain: {
+          mainnet: {
+            address: address2,
+          },
+        },
+      },
+    },
+  });
+
+  const configBuild = buildConfig({
+    common: context.common,
+    config,
+  });
+  const { sources } = await buildIndexingFunctions({
+    common: context.common,
+    config,
+    rawIndexingFunctions: [{ name: "a:Event0", fn: () => {} }],
+    configBuild,
+  });
+
+  expect((sources[0]!.filter as LogFilter).address).toBe(address2);
+});
+
+test("buildIndexingFunctions() handles chain name shortcut", async (context) => {
+  const config = createConfig({
+    chains: {
+      mainnet: { id: 1, rpc: getDevnetUrl() },
+    },
+    contracts: {
+      a: {
+        chain: "mainnet",
+        abi: [event0],
+        address: address1,
+        startBlock: 0,
+        endBlock: 100,
+      },
+    },
+  });
+
+  const configBuild = buildConfig({
+    common: context.common,
+    config,
+  });
+  const { sources } = await buildIndexingFunctions({
+    common: context.common,
+    config,
+    rawIndexingFunctions: [{ name: "a:Event0", fn: () => {} }],
+    configBuild,
+  });
+
+  expect(sources[0]!.chain.name).toBe("mainnet");
+});
+
+test("buildIndexingFunctions() validates chain name", async (context) => {
+  const config = createConfig({
+    chains: {
+      mainnet: { id: 1, rpc: getDevnetUrl() },
+    },
+    contracts: {
+      a: {
+        // @ts-expect-error
+        chain: "mainnetz",
+        abi: [event0],
+        address: address1,
+      },
+    },
+  });
+
+  const configBuild = buildConfig({
+    common: context.common,
+    config,
+  });
+  const result = await safeBuildIndexingFunctions({
+    common: context.common,
+    config,
+    rawIndexingFunctions: [{ name: "a:Event0", fn: () => {} }],
+    configBuild,
+  });
+
+  expect(result.status).toBe("error");
+  expect(result.error?.message).toBe(
+    "Validation failed: Invalid chain for 'a'. Got 'mainnetz', expected one of ['mainnet'].",
+  );
+});
+
+test("buildConfig() warns for public RPC URL", (context) => {
+  const config = createConfig({
+    chains: {
+      mainnet: { id: 1, rpc: "https://free-rpc.nethermind.io/mainnet-juno" },
+    },
+    contracts: {
+      a: {
+        chain: "mainnet",
+        abi: [event0],
+        address: address1,
+      },
+    },
+  });
+
+  const result = safeBuildConfig({
+    common: context.common,
+    config,
+  });
+
+  expect(result.status).toBe("success");
+  expect(result.logs!.filter((l) => l.level === "warn")).toMatchObject([
+    {
+      level: "warn",
+      msg: "Detected public RPC URL. Most apps require an RPC URL with a higher rate limit.",
+      url: "https://free-rpc.nethermind.io/mainnet-juno",
+    },
+  ]);
+});
+
+test("buildConfig() handles chains not found in viem", (context) => {
+  const config = createConfig({
+    chains: {
+      mainnet: { id: 1909023431, rpc: getDevnetUrl() },
+    },
+    contracts: {
+      a: {
+        chain: "mainnet",
+        abi: [event0],
+        address: address1,
+      },
+    },
+  });
+
+  const result = safeBuildConfig({
+    common: context.common,
+    config,
+  });
+
+  expect(result.status).toBe("success");
+});
+
+test("buildIndexingFunctions() validates event filter event name must be present in ABI", async (context) => {
+  const config = createConfig({
+    chains: {
+      mainnet: { id: 1, rpc: getDevnetUrl() },
+    },
+    contracts: {
+      a: {
+        chain: "mainnet",
+        abi: [event0],
+        // @ts-ignore
+        filter: {
+          event: "Event2",
+          args: {
+            arg: "0x",
+          },
+        },
+      },
+    },
+  });
+
+  const configBuild = buildConfig({
+    common: context.common,
+    // @ts-ignore
+    config,
+  });
+  const result = await safeBuildIndexingFunctions({
+    common: context.common,
+    // @ts-ignore
+    config,
+    rawIndexingFunctions: [{ name: "a:Event0", fn: () => {} }],
+    configBuild,
+  });
+
+  expect(result.status).toBe("error");
+  expect(result.error?.message).toBe(
+    "Validation failed: Invalid filter for contract 'a'. Got event name 'Event2', expected one of ['Event0'].",
+  );
+});
+
+test("buildIndexingFunctions() validates address empty string", async (context) => {
+  const config = createConfig({
+    chains: {
+      mainnet: { id: 1, rpc: getDevnetUrl() },
+    },
+    contracts: {
+      a: {
+        chain: "mainnet",
+        abi: [event0],
+        address: "" as Address,
+      },
+    },
+  });
+
+  const configBuild = buildConfig({
+    common: context.common,
+    config,
+  });
+
+  const result = await safeBuildIndexingFunctions({
+    common: context.common,
+    config,
+    rawIndexingFunctions: [{ name: "a:Event0", fn: () => {} }],
+    configBuild,
+  });
+
+  expect(result.status).toBe("error");
+  expect(result.error?.message).toBe("Invalid hex string: ");
+});
+
+test("buildIndexingFunctions() validates address prefix", async (context) => {
+  const config = createConfig({
+    chains: {
+      mainnet: { id: 1, rpc: getDevnetUrl() },
+    },
+    contracts: {
+      a: {
+        chain: "mainnet",
+        abi: [event0],
+
+        address:
+          "0b0000000000000000000000000000000000000000000000000000000000000001" as Address,
+      },
+    },
+  });
+
+  const configBuild = buildConfig({ common: context.common, config });
+  const result = await safeBuildIndexingFunctions({
+    common: context.common,
+    config,
+    rawIndexingFunctions: [{ name: "a:Event0", fn: () => {} }],
+    configBuild,
+  });
+
+  expect(result.status).toBe("error");
+  expect(result.error?.message).toBe(
+    "Invalid hex string: 0b0000000000000000000000000000000000000000000000000000000000000001",
+  );
+});
+
+test("buildIndexingFunctions() validates address length", async (context) => {
+  // Note: Starknet addresses are padded, so short hex strings are valid
+  // This test verifies that short addresses are still accepted (they get padded)
+  const config = createConfig({
+    chains: {
+      mainnet: { id: 1, rpc: getDevnetUrl() },
+    },
+    contracts: {
+      a: {
+        chain: "mainnet",
+        abi: [event0],
+        address: "0x000000000001",
+      },
+    },
+  });
+
+  const configBuild = buildConfig({ common: context.common, config });
+  const result = await safeBuildIndexingFunctions({
+    common: context.common,
+    config,
+    rawIndexingFunctions: [{ name: "a:Event0", fn: () => {} }],
+    configBuild,
+  });
+
+  expect(result.status).toBe("success");
+});
+
+test("buildIndexingFunctions() coerces NaN startBlock to undefined", async (context) => {
+  const config = createConfig({
+    chains: {
+      mainnet: { id: 1, rpc: getDevnetUrl() },
+    },
+    contracts: {
+      a: {
+        chain: { mainnet: {} },
+        abi: [event0, event1],
+        startBlock: Number.NaN,
+      },
+    },
+  });
+
+  const configBuild = buildConfig({ common: context.common, config });
+  const { sources } = await buildIndexingFunctions({
+    common: context.common,
+    config,
+    rawIndexingFunctions: [{ name: "a:Event0", fn: () => {} }],
+    configBuild,
+  });
+
+  expect(sources[0]?.filter.fromBlock).toBe(undefined);
+});
+
+test("buildIndexingFunctions() coerces `latest` to number", async (context) => {
+  const config = createConfig({
+    chains: {
+      mainnet: {
+        id: 1,
+        rpc: getDevnetUrl(),
+      },
+    },
+    contracts: {
+      a: {
+        chain: { mainnet: {} },
+        abi: [event0, event1],
+        startBlock: "latest",
+      },
+    },
+  });
+
+  const configBuild = buildConfig({ common: context.common, config });
+  const { sources } = await buildIndexingFunctions({
+    common: context.common,
+    config,
+    rawIndexingFunctions: [{ name: "a:Event0", fn: () => {} }],
+    configBuild,
+  });
+
+  expect(sources[0]?.filter.fromBlock).toBeTypeOf("number");
+});
+
+test("buildIndexingFunctions() includeTransactionReceipts", async (context) => {
+  const config = createConfig({
+    chains: {
+      mainnet: { id: 1, rpc: getDevnetUrl() },
+      optimism: { id: 10, rpc: getDevnetUrl() },
+    },
+    contracts: {
+      a: {
+        includeTransactionReceipts: true,
+        chain: {
+          mainnet: {},
+          optimism: { includeTransactionReceipts: false },
+        },
+        abi: [event0],
+      },
+    },
+  });
+  const configBuild = buildConfig({ common: context.common, config });
+  const { sources } = await buildIndexingFunctions({
+    common: context.common,
+    config,
+    rawIndexingFunctions: [{ name: "a:Event0", fn: () => {} }],
+    configBuild,
+  });
+
+  expect(sources[0]!.filter.hasTransactionReceipt).toBe(true);
+  expect(sources[1]!.filter.hasTransactionReceipt).toBe(false);
+});
+
+test("buildIndexingFunctions() includeCallTraces", async (context) => {
+  const config = createConfig({
+    chains: {
+      mainnet: { id: 1, rpc: getDevnetUrl() },
+      optimism: { id: 10, rpc: getDevnetUrl() },
+    },
+    contracts: {
+      a: {
+        includeCallTraces: true,
+        chain: {
+          mainnet: {},
+          optimism: { includeCallTraces: false },
+        },
+        address: zeroAddress,
+        abi: [func0],
+      },
+    },
+  });
+
+  const configBuild = buildConfig({ common: context.common, config });
+  const { sources } = await buildIndexingFunctions({
+    common: context.common,
+    config,
+    rawIndexingFunctions: [{ name: "a.func0()", fn: () => {} }],
+    configBuild,
+  });
+
+  expect(sources).toHaveLength(1);
+
+  expect((sources[0]!.filter as TraceFilter).fromAddress).toBeUndefined();
+  expect((sources[0]!.filter as TraceFilter).toAddress).toMatchObject([
+    "0x0000000000000000000000000000000000000000000000000000000000000000",
+  ]);
+  expect((sources[0]!.filter as TraceFilter).functionSelector).toMatchObject([
+    computeEventSelector(func0.name),
+  ]);
+  expect(sources[0]!.filter.hasTransactionReceipt).toBe(false);
+});
+
+test("buildIndexingFunctions() includeCallTraces with factory", async (context) => {
+  const config = createConfig({
+    chains: {
+      mainnet: { id: 1, rpc: getDevnetUrl() },
+      optimism: { id: 10, rpc: getDevnetUrl() },
+    },
+    contracts: {
+      a: {
+        includeCallTraces: true,
+        chain: {
+          mainnet: {},
+          optimism: { includeCallTraces: false },
+        },
+        address: factory({
+          address: address2,
+          event: eventFactory,
+          parameter: "child",
+        }),
+        abi: [func0],
+      },
+    },
+  });
+
+  const configBuild = buildConfig({ common: context.common, config });
+  const { sources } = await buildIndexingFunctions({
+    common: context.common,
+    config,
+    rawIndexingFunctions: [{ name: "a.func0()", fn: () => {} }],
+    configBuild,
+  });
+
+  expect(sources).toHaveLength(1);
+
+  expect((sources[0]!.filter as TraceFilter).fromAddress).toBeUndefined();
+  expect(
+    ((sources[0]!.filter as TraceFilter).toAddress as LogFactory).address,
+  ).toMatchObject(address2);
+  expect((sources[0]!.filter as TraceFilter).functionSelector).toMatchObject([
+    computeEventSelector(func0.name),
+  ]);
+  expect(sources[0]!.filter.hasTransactionReceipt).toBe(false);
+});
+
+test("buildIndexingFunctions() coerces NaN endBlock to undefined", async (context) => {
+  const config = createConfig({
+    chains: {
+      mainnet: { id: 1, rpc: getDevnetUrl() },
+    },
+    contracts: {
+      a: {
+        chain: { mainnet: {} },
+        abi: [event0, event1],
+        endBlock: Number.NaN,
+      },
+    },
+  });
+
+  const configBuild = buildConfig({ common: context.common, config });
+  const { sources } = await buildIndexingFunctions({
+    common: context.common,
+    config,
+    rawIndexingFunctions: [{ name: "a:Event0", fn: () => {} }],
+    configBuild,
+  });
+
+  expect(sources[0]!.filter.toBlock).toBe(undefined);
+});
+
+test("buildIndexingFunctions() account source", async (context) => {
+  const config = createConfig({
+    chains: {
+      mainnet: { id: 1, rpc: getDevnetUrl() },
+    },
+    accounts: {
+      a: {
+        chain: { mainnet: {} },
+        address: address1,
+        startBlock: 0,
+        endBlock: 100,
+      },
+    },
+  });
+
+  const configBuild = buildConfig({ common: context.common, config });
+  const { sources } = await buildIndexingFunctions({
+    common: context.common,
+    config,
+    rawIndexingFunctions: [
+      { name: "a:transfer:from", fn: () => {} },
+      { name: "a:transaction:to", fn: () => {} },
+    ],
+    configBuild,
+  });
+
+  expect(sources).toHaveLength(2);
+
+  expect(sources[0]?.chain.name).toBe("mainnet");
+  expect(sources[1]?.chain.name).toBe("mainnet");
+
+  expect(sources[0]?.name).toBe("a");
+  expect(sources[1]?.name).toBe("a");
+
+  expect(sources[0]?.filter.type).toBe("transaction");
+  expect(sources[1]?.filter.type).toBe("transfer");
+
+  expect(sources[0]?.filter.fromBlock).toBe(0);
+  expect(sources[1]?.filter.fromBlock).toBe(0);
+
+  expect(sources[0]?.filter.toBlock).toBe(100);
+  expect(sources[1]?.filter.toBlock).toBe(100);
+});
+
+test("buildIndexingFunctions() block source", async (context) => {
+  const config = createConfig({
+    chains: {
+      mainnet: { id: 1, rpc: getDevnetUrl() },
+    },
+    blocks: {
+      a: {
+        chain: { mainnet: {} },
+        startBlock: 0,
+        endBlock: 100,
+      },
+    },
+  });
+
+  const configBuild = buildConfig({ common: context.common, config });
+  const { sources } = await buildIndexingFunctions({
+    common: context.common,
+    config,
+    rawIndexingFunctions: [{ name: "a:block", fn: () => {} }],
+    configBuild,
+  });
+
+  expect(sources).toHaveLength(1);
+
+  expect(sources[0]?.chain.name).toBe("mainnet");
+  expect(sources[0]?.name).toBe("a");
+  expect(sources[0]?.filter.type).toBe("block");
+  // @ts-ignore
+  expect(sources[0]?.filter.interval).toBe(1);
+  expect(sources[0]?.filter.fromBlock).toBe(0);
+  expect(sources[0]?.filter.toBlock).toBe(100);
+});
+
+test("buildIndexingFunctions() coerces undefined factory interval to source interval", async (context) => {
+  const config = createConfig({
+    chains: {
+      mainnet: { id: 1, rpc: getDevnetUrl() },
+    },
+    contracts: {
+      a: {
+        chain: { mainnet: {} },
+        address: factory({
+          address: address2,
+          event: eventFactory,
+          parameter: "child",
+        }),
+        abi: [event0, event1],
+        startBlock: 0,
+        endBlock: 16370100,
+      },
+    },
+  });
+
+  const configBuild = buildConfig({ common: context.common, config });
+  const { sources } = await buildIndexingFunctions({
+    common: context.common,
+    config,
+    rawIndexingFunctions: [{ name: "a:Event0", fn: () => {} }],
+    configBuild,
+  });
+
+  expect(
+    ((sources[0]!.filter as LogFilter).address as LogFactory).fromBlock === 0,
+  );
+  expect(
+    ((sources[0]!.filter as LogFilter).address as LogFactory).toBlock ===
+      16370100, // This is set explicitly in the config
+  );
+});
+
+test("buildIndexingFunctions() validates factory interval", async (context) => {
+  const config = createConfig({
+    chains: {
+      mainnet: { id: 1, rpc: getDevnetUrl() },
+    },
+    contracts: {
+      a: {
+        chain: { mainnet: {} },
+        address: factory({
+          address: address2,
+          event: eventFactory,
+          parameter: "child",
+          startBlock: 16370050,
+        }),
+        abi: [event0, event1],
+        startBlock: 0,
+        endBlock: 16370100,
+      },
+    },
+  });
+
+  const configBuild = buildConfig({ common: context.common, config });
+  const result = await safeBuildIndexingFunctions({
+    common: context.common,
+    config,
+    rawIndexingFunctions: [{ name: "a:Event0", fn: () => {} }],
+    configBuild,
+  });
+
+  expect(result.status).toBe("error");
+  expect(result.error?.message).toBe(
+    "Validation failed: Start block for 'a' is before start block of factory address (16370050 > 0).",
+  );
+});
+
+test("buildIndexingFunctions() validates start and end block", async (context) => {
+  const config = createConfig({
+    chains: {
+      mainnet: { id: 1, rpc: getDevnetUrl() },
+    },
+    contracts: {
+      a: {
+        chain: { mainnet: {} },
+        abi: [event0, event1],
+        // @ts-expect-error
+        startBlock: "16370000",
+        // @ts-expect-error
+        endBlock: "16370100",
+      },
+    },
+  });
+
+  // @ts-expect-error
+  const configBuild = buildConfig({ common: context.common, config });
+  const result = await safeBuildIndexingFunctions({
+    common: context.common,
+    // @ts-expect-error
+    config,
+    rawIndexingFunctions: [{ name: "a:Event0", fn: () => {} }],
+    configBuild,
+  });
+
+  expect(result).toMatchInlineSnapshot(`
+    {
+      "error": [BuildError: Validation failed: Invalid start block for 'a'. Got 16370000 typeof string, expected an integer.],
+      "status": "error",
+    }
+  `);
+});
+
+test("buildIndexingFunctions() returns chain, rpc, and finalized block", async (context) => {
+  const config = createConfig({
+    chains: {
+      mainnet: { id: 1, rpc: getDevnetUrl() },
+    },
+    blocks: {
+      b: {
+        chain: "mainnet",
+      },
+    },
+  });
+
+  const configBuild = buildConfig({ common: context.common, config });
+  const { rpcs, chains, finalizedBlocks } = await buildIndexingFunctions({
+    common: context.common,
+    config,
+    rawIndexingFunctions: [{ name: "b:block", fn: () => {} }],
+    configBuild,
+  });
+
+  expect(rpcs).toHaveLength(1);
+  expect(chains).toHaveLength(1);
+  expect(finalizedBlocks).toHaveLength(1);
+
+  expect(chains[0]!.name).toBe("mainnet");
+  expect(chains[0]!.id).toBe(1);
+  expect(finalizedBlocks[0]!.number).toBe(0);
+});
+
+// Skip this not needed for starknet
+test.skip("buildIndexingFunctions() hyperliquid evm", async (context) => {
+  const config = createConfig({
+    chains: {
+      hyperliquid: { id: 999, rpc: getDevnetUrl() },
+    },
+    blocks: {
+      b: {
+        chain: "hyperliquid",
+      },
+    },
+  });
+
+  const configBuild = buildConfig({ common: context.common, config });
+  const { chains } = await buildIndexingFunctions({
+    common: context.common,
+    config,
+    rawIndexingFunctions: [{ name: "b:block", fn: () => {} }],
+    configBuild,
+  });
+
+  expect(chains).toHaveLength(1);
+
+  expect(chains[0]!.name).toBe("hyperliquid");
+  expect(chains[0]!.id).toBe(999);
+  // expect(chains[0]!.viemChain).toBe(hyperliquidEvm);
+});

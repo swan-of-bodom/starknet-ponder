@@ -1,0 +1,25 @@
+{
+  "name": "starknet-ponder-examples-feature-factory",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "ponder dev",
+    "start": "ponder start",
+    "codegen": "ponder codegen"
+  },
+  "dependencies": {
+    "starknet-ponder": "link:~/impermax/EXPERIMENTS/ponder/packages/starknet-core",
+    "hono": "4.5.0",
+    "starkweb2": "^0.0.6"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "eslint": "^8.54.0",
+    "eslint-config-ponder": "^0.9.4",
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=18.14"
+  }
+}
