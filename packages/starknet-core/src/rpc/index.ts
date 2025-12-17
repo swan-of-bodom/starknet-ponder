@@ -266,7 +266,7 @@ const isAvailable = (bucket: Bucket) => {
 export const createRpc = ({
   common,
   chain,
-  concurrency = 100,
+  concurrency = 25,
 }: { common: Common; chain: Chain; concurrency?: number }): Rpc => {
   let backends: { request: SNIP1193RequestFn<RpcSchema>; hostname: string }[];
 

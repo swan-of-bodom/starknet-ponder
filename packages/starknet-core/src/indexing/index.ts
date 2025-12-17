@@ -1,7 +1,7 @@
 import util from "node:util";
 import type { IndexingCache } from "@/indexing-store/cache.js";
 import type { IndexingStore } from "@/indexing-store/index.js";
-import type { CachedViemClient } from "@/indexing/client.js";
+import type { CachedStarknetJsClient, StarknetJsClientActions } from "@/indexing/starknetjs-client.js";
 import type { Common } from "@/internal/common.js";
 import {
   BaseError,
@@ -60,7 +60,6 @@ import { startClock } from "@/utils/timer.js";
 import type { Address } from "starkweb2";
 import type { StarknetAbi } from "@/types/starknetAbi.js";
 import { addStackTrace } from "./addStackTrace.js";
-import type { ReadonlyClient } from "./client.js";
 
 declare global {
   var DISABLE_EVENT_PROXY: boolean;
@@ -72,7 +71,7 @@ const METRICS_UPDATE_INTERVAL = 100;
 
 export type Context = {
   chain: { id: number; name: string };
-  client: ReadonlyClient;
+  client: StarknetJsClientActions;
   db: Db<Schema>;
   contracts: Record<
     string,
@@ -156,7 +155,7 @@ export const createIndexing = ({
     IndexingBuild,
     "sources" | "chains" | "indexingFunctions"
   >;
-  client: CachedViemClient;
+  client: CachedStarknetJsClient;
   eventCount: { [eventName: string]: number };
   indexingErrorHandler: IndexingErrorHandler;
   columnAccessPattern: ColumnAccessPattern;
@@ -169,7 +168,7 @@ export const createIndexing = ({
   };
 
   const chainById: { [chainId: number]: Chain } = {};
-  const clientByChainId: { [chainId: number]: ReadonlyClient } = {};
+  const clientByChainId: { [chainId: number]: StarknetJsClientActions } = {};
   const contractsByChainId: {
     [chainId: number]: Record<
       string,

@@ -16,7 +16,7 @@ import {
 import { createIndexingCache } from "@/indexing-store/cache.js";
 import { createHistoricalIndexingStore } from "@/indexing-store/historical.js";
 import { createRealtimeIndexingStore } from "@/indexing-store/realtime.js";
-import { createCachedViemClient } from "@/indexing/client.js";
+import { createCachedStarknetJsClient } from "@/indexing/starknetjs-client.js";
 import {
   createColumnAccessPattern,
   createIndexing,
@@ -101,11 +101,10 @@ export async function runOmnichain({
 
   let eventCount = getEventCount(indexingBuild.indexingFunctions);
 
-  const cachedViemClient = createCachedViemClient({
+  const cachedStarknetJsClient = createCachedStarknetJsClient({
     common,
     indexingBuild,
     syncStore,
-    eventCount,
   });
 
   const indexingErrorHandler: IndexingErrorHandler = {
@@ -124,7 +123,7 @@ export async function runOmnichain({
   const indexing = createIndexing({
     common,
     indexingBuild,
-    client: cachedViemClient,
+    client: cachedStarknetJsClient,
     eventCount,
     indexingErrorHandler,
     columnAccessPattern,
@@ -364,7 +363,7 @@ export async function runOmnichain({
     indexingCache.qb = database.userQB;
     await Promise.all([
       indexingCache.prefetch({ events }),
-      cachedViemClient.prefetch({ events }),
+      cachedStarknetJsClient.prefetch({ events }),
     ]);
     common.metrics.ponder_historical_transform_duration.inc(
       { step: "prefetch" },
@@ -506,7 +505,7 @@ export async function runOmnichain({
       context,
     );
 
-    cachedViemClient.clear();
+    cachedStarknetJsClient.clear();
     common.metrics.ponder_historical_transform_duration.inc(
       { step: "commit" },
       endClock(),

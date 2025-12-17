@@ -16,7 +16,7 @@ export * from "${schemaPath}";
 export default schema;
 `;
 
-const apiModule = () => `import { createPublicClient as createStarkwebClient, custom as starkwebCustom } from "starkweb2";
+const apiModule = () => `import { RpcProvider, Contract } from "starknet";
 
 if (globalThis.PONDER_INDEXING_BUILD === undefined || globalThis.PONDER_DATABASE === undefined) {
   throw new Error('Invalid dependency graph. Config, schema, and indexing function files cannot import objects from the API function file "src/api/index.ts".')
@@ -32,13 +32,34 @@ for (let i = 0; i < globalThis.PONDER_INDEXING_BUILD.chains.length; i++) {
   const chain = globalThis.PONDER_INDEXING_BUILD.chains[i];
   const rpc = globalThis.PONDER_INDEXING_BUILD.rpcs[i];
 
-  publicClients[chain.name] = createStarkwebClient({
-    transport: starkwebCustom({
-      request(body) {
-        return rpc.request(body);
-      }
-    }),
-  });
+  // Create a custom fetch function that uses our RPC
+  const customFetch = async (url, options) => {
+    const body = JSON.parse(options?.body);
+    const { method, params, id } = body;
+    try {
+      const result = await rpc.request({ method, params });
+      return new Response(JSON.stringify({ jsonrpc: "2.0", id, result }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (error) {
+      return new Response(JSON.stringify({
+        jsonrpc: "2.0",
+        id,
+        error: { code: -32603, message: error?.message || "Unknown error" },
+      }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+  };
+
+  const provider = new RpcProvider({ nodeUrl: "http://localhost:5050", baseFetch: customFetch });
+
+  publicClients[chain.name] = {
+    provider,
+    contract: (abi, address) => new Contract({ abi, address, providerOrAccount: provider }),
+  };
 }
 
 export const db = globalThis.PONDER_DATABASE.readonlyQB.raw;

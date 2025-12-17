@@ -1166,6 +1166,9 @@ importers:
       '@scure/starknet':
         specifier: ^1.0.0
         version: 1.1.0
+      '@starknet-io/types-js':
+        specifier: ^0.10.0
+        version: 0.10.0
       abitype:
         specifier: ^0.10.2
         version: 0.10.3(typescript@5.0.4)(zod@3.23.8)
@@ -1232,6 +1235,9 @@ importers:
       stacktrace-parser:
         specifier: ^0.1.10
         version: 0.1.10
+      starknet:
+        specifier: ^9.0.0
+        version: 9.1.1(typescript@5.0.4)(zod@3.23.8)
       superjson:
         specifier: ^2.2.2
         version: 2.2.2
@@ -1290,9 +1296,6 @@ importers:
       rimraf:
         specifier: ^5.0.5
         version: 5.0.5
-      starknet:
-        specifier: ^9.0.0
-        version: 9.1.1(typescript@5.0.4)(zod@3.23.8)
       starknet-devnet:
         specifier: ^0.6.0
         version: 0.6.0

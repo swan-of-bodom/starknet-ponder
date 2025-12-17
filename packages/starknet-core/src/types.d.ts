@@ -25,18 +25,16 @@ declare module "ponder:schema" {
 }
 
 declare module "ponder:api" {
-  import type { ReadonlyDrizzle, ReadonlyClient } from "starknet-ponder";
+  import type { ReadonlyDrizzle, StarknetJsClientActions } from "starknet-ponder";
 
   type schema = typeof import("ponder:internal").schema;
   type config = typeof import("ponder:internal").config;
 
   export const db: ReadonlyDrizzle<schema>;
 
-  // NOTE: Using ReadonlyClient instead of starkweb's PublicClient for proper type inference.
-  // ReadonlyClient wraps the client with PonderActions which have better TypeScript inference
-  // for readContract/readContracts return types. Without this, return types would be 'any'.
-  // See: packages/starknet-core/src/indexing/client.ts for ReadonlyClient and PonderActions definitions.
+  // Starknet.js based client with contract factory pattern.
+  // Usage: publicClients["mainnet"].contract(abi, address).functionName()
   export const publicClients: {
-    [chainName in keyof config["default"]["chains"]]: ReadonlyClient;
+    [chainName in keyof config["default"]["chains"]]: StarknetJsClientActions;
   };
 }

@@ -3,7 +3,7 @@
 
 import type { SafeEventNames, GetEventArgs } from "./utility-types.js";
 import type { Db } from "./db.js";
-import type { ReadonlyClient } from "../indexing/client.js";
+import type { StarknetJsClientActions } from "../indexing/starknetjs-client.js";
 import type { Config } from "@/config/index.js";
 import type { Prettify } from "./utils.js";
 import type { Block, Log, TransactionReceipt } from "./starknet.js";
@@ -183,8 +183,8 @@ export namespace Virtual {
             id: config["chains"][key & keyof config["chains"]]["id"];
           };
         }[keyof sourceChain];
-    /** Starkweb client for making contract calls (readonly) */
-    client: Prettify<ReadonlyClient>;
+    /** Starknet.js client for making contract calls (readonly) */
+    client: Prettify<StarknetJsClientActions>;
     /** Ponder database instance with find, insert, update, delete methods */
     db: Db<schema>;
   };

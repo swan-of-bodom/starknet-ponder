@@ -7,7 +7,7 @@ import { glob } from "glob";
 import pc from "picocolors";
 import { rimraf } from "rimraf";
 
-const PACKAGE_NAME = "@PONDER/CORE";
+const PACKAGE_NAME = "@PONDER/STARKNET-CORE";
 
 const TSCONFIG = "tsconfig.build.json";
 const WATCH_DIRECTORY = "src";
