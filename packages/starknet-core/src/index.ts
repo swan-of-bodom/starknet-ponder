@@ -75,7 +75,7 @@ export type {
 } from "@/drizzle/onchain.js";
 
 export type { ReadonlyDrizzle } from "@/types/db.js";
-export type { StarknetJsClientActions } from "@/indexing/starknetjs-client.js";
+export type { StarknetJsClientActions } from "@/indexing/client.js";
 
 export { client } from "@/client/index.js";
 

@@ -5,8 +5,8 @@ import type {
 } from "./utilityTypes.js";
 
 /**
- * TODO: Open PR to starkweb2's `GetEventArgs` to support Cairo 1's `kind: "key"` instead of EVM's `indexed: true`.
- * Currently starkweb2 filters by `{ indexed: true }` which doesn't work with native Cairo 1 ABIs.
+ * Note: Cairo 1 uses `kind: "key"` for indexed event parameters, which differs from EVM's `indexed: true`.
+ * This implementation handles both Cairo 1 native ABIs and ABI structures that use `indexed`.
  */
 export type GetEventFilter<
   abi extends StarknetAbi | readonly unknown[],

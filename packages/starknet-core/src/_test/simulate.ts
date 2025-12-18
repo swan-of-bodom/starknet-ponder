@@ -15,7 +15,7 @@ import type {
 import { toLowerCase } from "@/utils/lowercase.js";
 import { computeEventSelector } from "@/utils/event-selector.js";
 import { toHex64 } from "@/utils/hex.js";
-import type { Address, Hex } from "starkweb2";
+import type { Address, Hex } from "viem";
 import { Account, RpcProvider, hash, CallData, uint256, ETransactionVersion, Signer } from "starknet";
 import { DevnetProvider } from "starknet-devnet";
 

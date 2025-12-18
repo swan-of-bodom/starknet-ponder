@@ -599,7 +599,7 @@ export const createBuild = async ({
       };
       const endClock = startClock();
 
-      // These match the IDs used by starkweb and should match ponder.config.ts
+      // These match the IDs used in utils/chains.ts and should match ponder.config.ts
       // ie. in ponder.config.ts use 1 for mainnet, 2 for sepolia
       const STARKNET_CHAIN_ID_MAP: Record<string, number> = {
         '0x534e5f4d41494e': 1,      // SN_MAIN

@@ -1100,7 +1100,7 @@ export function buildConfig({
       if (chain.rpc === undefined || chain.rpc === "") {
         if (matchedChain === undefined) {
           throw new Error(
-            `Chain "${chainName}" with id ${chainId} has no RPC defined and no default RPC URL was found in 'starkweb/chains'.`,
+            `Chain "${chainName}" with id ${chainId} has no RPC defined and no default RPC URL was found.`,
           );
         }
 

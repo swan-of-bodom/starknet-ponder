@@ -38,8 +38,7 @@ import {
 import { buildAbiEvents, buildAbiFunctions } from "@/utils/abi.js";
 import { computeEventSelector } from "@/utils/event-selector.js";
 import { toLowerCase } from "@/utils/lowercase.js";
-import type { Address, Chain as ViemChain } from "starkweb2";
-import { http, createPublicClient } from "starkweb2";
+import type { Address, Chain as ViemChain } from "viem";
 import type { StarknetAbi } from "@/types/starknetAbi.js";
 import { RpcProvider as StarknetRpcProvider } from "starknet";
 import { DevnetProvider } from "starknet-devnet";
@@ -98,28 +97,21 @@ export const getPredeployedAccounts = async (withBalance = false) => {
   }>;
 };
 
-// Starknet chain config for starkweb2 compatibility
-export const anvil = {
+// Starknet chain config for viem Chain compatibility
+export const anvil: ViemChain = {
   id: 1, // Using chainId 1 for compatibility (Starknet uses different chain IDs)
-  chain_id: "0x534e5f5345504f4c4941" as const, // SN_SEPOLIA in hex
   name: "Starknet Devnet",
   nativeCurrency: {
     name: "Ether",
     symbol: "ETH",
     decimals: 18,
-    address: ETH_TOKEN_ADDRESS,
   },
   rpcUrls: {
     default: {
       http: [getDevnetUrl()],
-      webSocket: [],
-    },
-    public: {
-      http: [getDevnetUrl()],
-      webSocket: [],
     },
   },
-} as const satisfies ViemChain;
+};
 
 // Create starknet.js RPC provider for Starknet JSON-RPC calls
 export const starknetProvider = new StarknetRpcProvider({
@@ -128,9 +120,6 @@ export const starknetProvider = new StarknetRpcProvider({
 
 // Create devnet provider for devnet-specific operations (dump/load state, etc.)
 export const devnetProvider = new DevnetProvider({ url: getDevnetUrl() });
-
-// Store for snapshots - maps snapshot IDs to dumped state
-const snapshotStore = new Map<string, any>();
 
 // Import resetMockState lazily to avoid circular deps
 let _resetMockState: (() => void) | null = null;
@@ -170,12 +159,6 @@ export const testClient = {
     }
   },
 } as any;
-
-// Public client using starkweb2 for compatibility with existing code
-export const publicClient = createPublicClient({
-  chain: anvil,
-  transport: http(),
-});
 
 export const getErc20IndexingBuild = <
   includeCallTraces extends boolean = false,

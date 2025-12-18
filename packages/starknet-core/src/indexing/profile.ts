@@ -28,7 +28,7 @@ const eq = (target: bigint | string | number | boolean, value: any) => {
 /** Base type for readContract parameters used in profile recording */
 type ReadContractArgs = {
   address: string;
-  abi: Abi;
+  abi: Abi | readonly unknown[];
   functionName: string;
   args?: readonly unknown[] | Record<string, unknown>;
   cache?: "immutable";
@@ -56,7 +56,7 @@ export const recordProfilePattern = ({
         return hint;
       }
       if (request.args === undefined || args.args === undefined) continue;
-      // Normalize args to array format - starkweb2 supports both object { param: value } and array [value] syntax
+      // Normalize args to array format - supports both object { param: value } and array [value] syntax
       const rawArgsToCompare = (args as any).args;
       const argsToCompare = Array.isArray(rawArgsToCompare)
         ? rawArgsToCompare
@@ -362,7 +362,7 @@ export const recordProfilePattern = ({
     hasConstant = true;
   }
 
-  // Normalize args to array format - starkweb2 supports both object { param: value } and array [value] syntax
+  // Normalize args to array format - supports both object { param: value } and array [value] syntax
   const rawArgs = (args as any).args;
   const argsArray =
     rawArgs === undefined

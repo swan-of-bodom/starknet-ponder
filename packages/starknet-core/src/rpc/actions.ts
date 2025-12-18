@@ -51,6 +51,12 @@ export const _starknet_getBlockByNumber = async (
       context,
     );
 
+    // Debug logging
+    if (process.env.DEBUG_RPC) {
+      console.log(`[DEBUG] _starknet_getBlockByNumber requested: ${blockNumber ?? blockTag}`);
+      console.log(`[DEBUG] Response block_number: ${block?.block_number}, blockNumber: ${block?.blockNumber}`);
+    }
+
     return standardizeStarknetBlock(block);
   } catch (error: any) {
     throw new RpcProviderError(
@@ -512,25 +518,36 @@ function convertRpcTransaction(tx: any, index: number): SyncTransaction {
 }
 
 function standardizeStarknetBlock(block: any): SyncBlock {
+  // Handle both snake_case (raw RPC) and camelCase (starknetjs normalized) field names
+  const blockHash = block.block_hash ?? block.blockHash;
+  const blockNumber = block.block_number ?? block.blockNumber;
+  const parentHash = block.parent_hash ?? block.parentHash;
+  const newRoot = block.new_root ?? block.newRoot;
+  const sequencerAddress = block.sequencer_address ?? block.sequencerAddress;
+  const starknetVersion = block.starknet_version ?? block.starknetVersion;
+  const l1DaMode = block.l1_da_mode ?? block.l1DaMode;
+  const l1GasPrice = block.l1_gas_price ?? block.l1GasPrice;
+  const l1DataGasPrice = block.l1_data_gas_price ?? block.l1DataGasPrice;
+
   // Transform Starknet transactions to pure Starknet format
   const transactions: SyncTransaction[] = (block.transactions || []).map(
     (tx: any, index: number) => convertRpcTransaction(tx, index),
   );
 
   return {
-    hash: toHex64(block.block_hash) as Hex,
-    number: block.block_number,
-    parentHash: toHex64(block.parent_hash) as Hex,
+    hash: toHex64(blockHash) as Hex,
+    number: blockNumber,
+    parentHash: toHex64(parentHash) as Hex,
     timestamp: block.timestamp,
-    newRoot: block.new_root ? (toHex64(block.new_root) as Hex) : "0x0",
-    sequencerAddress: block.sequencer_address
-      ? (toHex64(block.sequencer_address) as Hex)
+    newRoot: newRoot ? (toHex64(newRoot) as Hex) : "0x0",
+    sequencerAddress: sequencerAddress
+      ? (toHex64(sequencerAddress) as Hex)
       : "0x0",
-    starknetVersion: block.starknet_version || "",
+    starknetVersion: starknetVersion || "",
     status: block.status || "ACCEPTED_ON_L2",
-    l1DaMode: block.l1_da_mode || "BLOB",
-    l1GasPrice: block.l1_gas_price || { priceInFri: "0x0", priceInWei: "0x0" },
-    l1DataGasPrice: block.l1_data_gas_price || {
+    l1DaMode: l1DaMode || "BLOB",
+    l1GasPrice: l1GasPrice || { priceInFri: "0x0", priceInWei: "0x0" },
+    l1DataGasPrice: l1DataGasPrice || {
       priceInFri: "0x0",
       priceInWei: "0x0",
     },

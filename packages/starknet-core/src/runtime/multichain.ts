@@ -16,7 +16,7 @@ import {
 import { createIndexingCache } from "@/indexing-store/cache.js";
 import { createHistoricalIndexingStore } from "@/indexing-store/historical.js";
 import { createRealtimeIndexingStore } from "@/indexing-store/realtime.js";
-import { createCachedStarknetJsClient } from "@/indexing/starknetjs-client.js";
+import { createCachedStarknetJsClient } from "@/indexing/client.js";
 import {
   createColumnAccessPattern,
   createIndexing,

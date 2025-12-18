@@ -3,7 +3,7 @@ import {
   type DecodeAbiParametersReturnType,
   decodeAbiParameters as decodeAbiParametersViem,
   parseAbiParameters,
-} from "starkweb2";
+} from "viem";
 import {
   decodeAbiParameter,
   decodeAbiParameters,

@@ -23,7 +23,6 @@
     "simple-git-hooks": "^2.9.0",
     "typescript": "5.0.4",
     "viem": "2.30.1",
-    "starkweb2": ">=0.0.7",
     "starknet": "^9.0.0"
   },
   "lint-staged": {

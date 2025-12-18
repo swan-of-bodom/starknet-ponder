@@ -1,7 +1,7 @@
 import util from "node:util";
 import type { IndexingCache } from "@/indexing-store/cache.js";
 import type { IndexingStore } from "@/indexing-store/index.js";
-import type { CachedStarknetJsClient, StarknetJsClientActions } from "@/indexing/starknetjs-client.js";
+import type { CachedStarknetJsClient, StarknetJsClientActions } from "@/indexing/client.js";
 import type { Common } from "@/internal/common.js";
 import {
   BaseError,

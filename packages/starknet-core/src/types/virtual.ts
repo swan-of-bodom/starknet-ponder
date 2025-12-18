@@ -3,7 +3,7 @@
 
 import type { SafeEventNames, GetEventArgs } from "./utility-types.js";
 import type { Db } from "./db.js";
-import type { StarknetJsClientActions } from "../indexing/starknetjs-client.js";
+import type { StarknetJsClientActions } from "../indexing/client.js";
 import type { Config } from "@/config/index.js";
 import type { Prettify } from "./utils.js";
 import type { Block, Log, TransactionReceipt } from "./starknet.js";
@@ -133,7 +133,7 @@ export namespace Virtual {
 
   /**
    * Virtual Context type - matches Ponder EVM API structure
-   * Provides db, contracts (all registered), chain, and starkweb client
+   * Provides db, contracts (all registered), chain, and starknetjs client
    */
   export type Context<
     config extends Config,

@@ -1,8 +1,5 @@
-// TODO: Improve:
-//       - Add websocket support, but alchemy don't support yet but quicknode does i think
-//       - Increased INITIAL_MAX_RPS, but still needs testing with different rpc providers,
-//         works well with alchemy (~15-20% faster)
-//       - Still missing some devnet methods used for testing 
+// Starknet RPC layer using starknetjs
+// Based on /core's implementation pattern but adapted for Starknet
 
 import crypto from "node:crypto";
 import url from "node:url";
@@ -11,7 +8,6 @@ import type { Logger } from "@/internal/logger.js";
 import type { Chain, SyncBlock, SyncBlockHeader } from "@/internal/types.js";
 import {
   _starknet_getBlockByNumber,
-  _starknet_getBlockByHash,
   standardizeBlock,
 } from "@/rpc/actions.js";
 import { createQueue } from "@/utils/queue.js";
@@ -21,23 +17,10 @@ import {
   type GetLogsRetryHelperParameters,
   getLogsRetryHelper,
 } from "@ponder/utils";
-import {
-  http,
-  BlockNotFoundError,
-  type SNIP1193Parameters,
-  type SNIP1193RequestFn,
-  type SNIP1474Methods,
-  HttpRequestError,
-  JsonRpcVersionUnsupportedError,
-  MethodNotFoundRpcError,
-  MethodNotSupportedRpcError,
-  ParseRpcError,
-  type RpcError,
-  TimeoutError,
-  webSocket,
-} from "starkweb2";
+import type { RpcError } from "viem";
+// RpcProvider no longer needed - using direct HTTP fetch for performance
 import { WebSocket } from "ws";
-import type { DebugRpcSchema } from "../utils/debug.js";
+// Note: DebugRpcSchema from "../utils/debug.js" available for debugging
 
 /** Starknet RPC Types (raw snake_case format from RPC) */
 export type StarknetEvent = {
@@ -84,7 +67,6 @@ export type StarknetTransactionReceipt = {
     bitwise_builtin_applications?: number;
     keccak_builtin_applications?: number;
     segment_arena_builtin?: number;
-    // Newer format with l1_gas, l1_data_gas, l2_gas directly
     l1_gas?: number;
     l1_data_gas?: number;
     l2_gas?: number;
@@ -93,10 +75,9 @@ export type StarknetTransactionReceipt = {
       l1_data_gas: number;
     };
   };
-  // Optional fields that vary by transaction type
-  revert_reason?: string; // Present when execution_status is "REVERTED"
-  contract_address?: string; // Present on DEPLOY and DEPLOY_ACCOUNT receipts
-  message_hash?: string; // Present on L1_HANDLER receipts
+  revert_reason?: string;
+  contract_address?: string;
+  message_hash?: string;
 };
 
 export type StarknetBlockWithReceipts = {
@@ -109,7 +90,6 @@ export type StarknetBlockWithReceipts = {
   }>;
 } | null;
 
-/** Starknet block with transactions (returned by starknet_getBlockWithTxs) */
 export type StarknetBlockWithTxs = {
   block_number: number;
   block_hash: string;
@@ -125,41 +105,54 @@ export type StarknetBlockWithTxs = {
   transactions: any[];
 } | null;
 
-/** Starknet RPC Schema - uses SNIP1474Methods from starkweb2 plus devnet-specific methods */
-export type RpcSchema = [
-  ...SNIP1474Methods,
-  ...DebugRpcSchema,
-  /**
-   * Used for testing only
-   */
-  {
-    Method: "devnet_getPredeployedAccounts";
-    Parameters: [{ with_balance?: boolean }] | [];
-    ReturnType: Array<{
-      initial_balance: string;
-      address: string;
-      public_key: string;
-      private_key: string;
-      balance?: {
-        eth: { amount: string; unit: string };
-        strk: { amount: string; unit: string };
-      };
-    }>;
-  },
-];
+/** Starknet RPC method types */
+type StarknetRpcMethod =
+  | "starknet_blockNumber"
+  | "starknet_blockHashAndNumber"
+  | "starknet_getBlockWithTxHashes"
+  | "starknet_getBlockWithTxs"
+  | "starknet_getBlockWithReceipts"
+  | "starknet_getStateUpdate"
+  | "starknet_getStorageAt"
+  | "starknet_getTransactionStatus"
+  | "starknet_getTransactionByHash"
+  | "starknet_getTransactionByBlockIdAndIndex"
+  | "starknet_getTransactionReceipt"
+  | "starknet_getClass"
+  | "starknet_getClassHashAt"
+  | "starknet_getClassAt"
+  | "starknet_getBlockTransactionCount"
+  | "starknet_call"
+  | "starknet_estimateFee"
+  | "starknet_estimateMessageFee"
+  | "starknet_getNonce"
+  | "starknet_chainId"
+  | "starknet_syncing"
+  | "starknet_getEvents"
+  | "starknet_specVersion"
+  | "starknet_traceTransaction"
+  | "starknet_traceBlockTransactions"
+  | "starknet_subscribeNewHeads"
+  | "starknet_unsubscribe"
+  | "devnet_getPredeployedAccounts";
 
-export type RequestParameters = SNIP1193Parameters<RpcSchema>;
+/** Request parameters type */
+export type RequestParameters = {
+  method: StarknetRpcMethod | string;
+  params?: any;
+};
 
-export type RequestReturnType<
-  method extends SNIP1193Parameters<RpcSchema>["method"],
-> = Extract<RpcSchema[number], { Method: method }>["ReturnType"];
+/** Request function type */
+export type RequestFn = <T = any>(
+  params: RequestParameters,
+) => Promise<T>;
 
 export type Rpc = {
   hostnames: string[];
-  request: <TParameters extends RequestParameters>(
-    parameters: TParameters,
+  request: <T = any>(
+    parameters: RequestParameters,
     context?: { logger?: Logger; retryNullBlockRequest?: boolean },
-  ) => Promise<RequestReturnType<TParameters["method"]>>;
+  ) => Promise<T>;
   subscribe: (params: {
     onBlock: (block: SyncBlock | SyncBlockHeader) => Promise<boolean>;
     onError: (error: Error) => void;
@@ -167,15 +160,45 @@ export type Rpc = {
   unsubscribe: () => Promise<void>;
 };
 
+// RPC error classes
+class BlockNotFoundError extends Error {
+  constructor({ blockNumber }: { blockNumber?: bigint }) {
+    super(`Block not found${blockNumber !== undefined ? `: ${blockNumber}` : ""}`);
+    this.name = "BlockNotFoundError";
+  }
+}
+
+class HttpRequestError extends Error {
+  status?: number;
+  constructor(message: string, status?: number) {
+    super(message);
+    this.name = "HttpRequestError";
+    this.status = status;
+  }
+}
+
+class TimeoutError extends Error {
+  constructor(message = "Request timed out") {
+    super(message);
+    this.name = "TimeoutError";
+  }
+}
+
+// RPC error codes
+const RPC_ERROR_CODES = {
+  PARSE_ERROR: -32700,
+  METHOD_NOT_FOUND: -32601,
+  METHOD_NOT_SUPPORTED: -32004,
+  JSON_RPC_VERSION_UNSUPPORTED: -32006,
+} as const;
+
 const RETRY_COUNT = 9;
 const BASE_DURATION = 125;
 const INITIAL_REACTIVATION_DELAY = 100;
 const MAX_REACTIVATION_DELAY = 5_000;
 const BACKOFF_FACTOR = 1.5;
 const LATENCY_WINDOW_SIZE = 500;
-/** Hurdle rate for switching to a faster bucket. */
 const LATENCY_HURDLE_RATE = 0.1;
-/** Exploration rate. */
 const EPSILON = 0.1;
 const INITIAL_MAX_RPS = 100;
 const MIN_RPS = 3;
@@ -188,30 +211,23 @@ const SUCCESS_MULTIPLIER = 5;
 type Bucket = {
   index: number;
   hostname: string;
-  /** Reactivation delay in milliseconds. */
   reactivationDelay: number;
-  /** Number of active connections. */
   activeConnections: number;
-  /** Is the bucket available to send requests. */
   isActive: boolean;
-  /** Is the bucket recently activated and yet to complete successful requests. */
   isWarmingUp: boolean;
 
   latencyMetadata: {
     latencies: { value: number; success: boolean }[];
-
     successfulLatencies: number;
     latencySum: number;
   };
   expectedLatency: number;
 
   rps: { count: number; timestamp: number }[];
-  /** Number of consecutive successful requests. */
   consecutiveSuccessfulRequests: number;
-  /** Maximum requests per second (dynamic). */
   rpsLimit: number;
 
-  request: SNIP1193RequestFn<RpcSchema>;
+  request: RequestFn;
 };
 
 const addLatency = (bucket: Bucket, latency: number, success: boolean) => {
@@ -234,9 +250,6 @@ const addLatency = (bucket: Bucket, latency: number, success: boolean) => {
     bucket.latencyMetadata.successfulLatencies;
 };
 
-/**
- * Return `true` if the bucket is available to send a request.
- */
 const isAvailable = (bucket: Bucket) => {
   if (bucket.isActive === false) return false;
 
@@ -263,12 +276,138 @@ const isAvailable = (bucket: Bucket) => {
   return true;
 };
 
+/**
+ * Create a request function using direct HTTP fetch for performance
+ * Formats params correctly for Starknet JSON-RPC spec
+ */
+const createRequestFn = (nodeUrl: string, timeout = 10_000): RequestFn => {
+  let requestId = 0;
+
+  return async <T>(params: RequestParameters): Promise<T> => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+    try {
+      const { method, params: rpcParams } = params;
+
+      // Format params based on the method - Starknet RPC uses named params in an object
+      let formattedParams: any;
+
+      switch (method) {
+        case "starknet_getBlockWithTxs":
+        case "starknet_getBlockWithTxHashes":
+        case "starknet_getBlockWithReceipts": {
+          // These methods take { block_id: BlockIdentifier }
+          const blockId = rpcParams?.block_id ?? "latest";
+          formattedParams = { block_id: blockId };
+          break;
+        }
+        case "starknet_getTransactionByHash": {
+          formattedParams = { transaction_hash: rpcParams?.transaction_hash };
+          break;
+        }
+        case "starknet_getTransactionReceipt": {
+          formattedParams = { transaction_hash: rpcParams?.transaction_hash };
+          break;
+        }
+        case "starknet_getEvents": {
+          formattedParams = { filter: rpcParams?.filter };
+          break;
+        }
+        case "starknet_call": {
+          formattedParams = {
+            request: rpcParams?.request,
+            block_id: rpcParams?.block_id ?? "latest",
+          };
+          break;
+        }
+        case "starknet_getStorageAt": {
+          if (Array.isArray(rpcParams)) {
+            formattedParams = {
+              contract_address: rpcParams[0],
+              key: rpcParams[1],
+              block_id: rpcParams[2] ?? "latest",
+            };
+          } else {
+            formattedParams = {
+              contract_address: rpcParams?.contract_address,
+              key: rpcParams?.key,
+              block_id: rpcParams?.block_id ?? "latest",
+            };
+          }
+          break;
+        }
+        case "starknet_getClassAt":
+        case "starknet_getClassHashAt": {
+          formattedParams = {
+            contract_address: rpcParams?.contract_address,
+            block_id: rpcParams?.block_id ?? "latest",
+          };
+          break;
+        }
+        case "starknet_getNonce": {
+          formattedParams = {
+            contract_address: rpcParams?.contract_address,
+            block_id: rpcParams?.block_id ?? "latest",
+          };
+          break;
+        }
+        case "starknet_chainId":
+        case "starknet_blockNumber":
+        case "starknet_specVersion":
+        case "starknet_syncing": {
+          // These methods take no params
+          formattedParams = {};
+          break;
+        }
+        default: {
+          // Pass through as-is for unknown methods
+          formattedParams = rpcParams ?? {};
+        }
+      }
+
+      const response = await fetch(nodeUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: ++requestId,
+          method,
+          params: formattedParams,
+        }),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        throw new HttpRequestError(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const json = await response.json();
+
+      if (json.error) {
+        throw new HttpRequestError(`RPC Error: ${json.error.message || JSON.stringify(json.error)}`);
+      }
+
+      return json.result as T;
+    } catch (error: any) {
+      if (controller.signal.aborted || error.name === "AbortError") {
+        throw new TimeoutError();
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  };
+};
+
 export const createRpc = ({
   common,
   chain,
   concurrency = 25,
 }: { common: Common; chain: Chain; concurrency?: number }): Rpc => {
-  let backends: { request: SNIP1193RequestFn<RpcSchema>; hostname: string }[];
+  let backends: { request: RequestFn; hostname: string }[];
 
   if (typeof chain.rpc === "string") {
     const protocol = new url.URL(chain.rpc).protocol;
@@ -276,22 +415,17 @@ export const createRpc = ({
     if (protocol === "https:" || protocol === "http:") {
       backends = [
         {
-          request: http(chain.rpc)({
-            chain: chain.viemChain,
-            retryCount: 0,
-            timeout: 10_000,
-          }).request,
+          request: createRequestFn(chain.rpc),
           hostname,
         },
       ];
     } else if (protocol === "wss:" || protocol === "ws:") {
+      // For WebSocket URLs, still use HTTP for requests but note the WS endpoint
+      // WebSocket is only used for subscriptions
+      const httpUrl = chain.rpc.replace(/^wss?:/, protocol === "wss:" ? "https:" : "http:");
       backends = [
         {
-          request: webSocket(chain.rpc)({
-            chain: chain.viemChain,
-            retryCount: 0,
-            timeout: 10_000,
-          }).request,
+          request: createRequestFn(httpUrl),
           hostname,
         },
       ];
@@ -301,24 +435,17 @@ export const createRpc = ({
   } else if (Array.isArray(chain.rpc)) {
     backends = chain.rpc.map((rpc) => {
       const protocol = new url.URL(rpc).protocol;
-      const hostname = new url.URL(chain.rpc).hostname;
+      const hostname = new url.URL(rpc).hostname;
 
       if (protocol === "https:" || protocol === "http:") {
         return {
-          request: http(rpc)({
-            chain: chain.viemChain,
-            retryCount: 0,
-            timeout: 10_000,
-          }).request,
+          request: createRequestFn(rpc),
           hostname,
         };
       } else if (protocol === "wss:" || protocol === "ws:") {
+        const httpUrl = rpc.replace(/^wss?:/, protocol === "wss:" ? "https:" : "http:");
         return {
-          request: webSocket(rpc)({
-            chain: chain.viemChain,
-            retryCount: 0,
-            timeout: 10_000,
-          }).request,
+          request: createRequestFn(httpUrl),
           hostname,
         };
       } else {
@@ -326,13 +453,17 @@ export const createRpc = ({
       }
     });
   } else {
+    // Custom transport function - create a wrapper
+    const customRequest: RequestFn = async (params) => {
+      // For custom transports, we need to call them directly
+      // This assumes the custom transport follows the same interface
+      const transport = chain.rpc as any;
+      const client = transport({ chain: chain.viemChain, retryCount: 0, timeout: 10_000 });
+      return client.request(params);
+    };
     backends = [
       {
-        request: chain.rpc({
-          chain: chain.viemChain,
-          retryCount: 0,
-          timeout: 10_000,
-        }).request,
+        request: customRequest,
         hostname: "custom_transport",
       },
     ];
@@ -375,8 +506,6 @@ export const createRpc = ({
   );
 
   let noAvailableBucketsTimer: NodeJS.Timeout | undefined;
-
-  /** Tracks all active bucket reactivation timeouts to cleanup during shutdown */
   const timeouts = new Set<NodeJS.Timeout>();
 
   const scheduleBucketActivation = (bucket: Bucket) => {
@@ -408,11 +537,9 @@ export const createRpc = ({
   const getBucket = async (): Promise<Bucket> => {
     let availableBuckets: Bucket[];
 
-    // Note: wait for the next event loop to ensure that the bucket rps are updated
     await new Promise((resolve) => setImmediate(resolve));
 
     while (true) {
-      // Remove old request per second data
       const timestamp = Math.floor(Date.now() / 1000);
       for (const bucket of buckets) {
         bucket.rps = bucket.rps.filter((r) => r.timestamp > timestamp - 10);
@@ -552,7 +679,6 @@ export const createRpc = ({
             duration: getBucketDuration,
           });
 
-          // Add request per second data
           const timestamp = Math.floor(Date.now() / 1000);
           if (
             bucket.rps.length === 0 ||
@@ -575,12 +701,10 @@ export const createRpc = ({
               body.method === "starknet_getBlockWithReceipts") &&
             context?.retryNullBlockRequest === true
           ) {
-            // Note: Throwing this error will cause the request to be retried.
             const blockId = (body.params as { block_id?: { block_number?: number } } | undefined)?.block_id;
             const blockNum = blockId?.block_number;
             throw new BlockNotFoundError({
-              blockNumber:
-                blockNum !== undefined ? BigInt(blockNum) : undefined,
+              blockNumber: blockNum !== undefined ? BigInt(blockNum) : undefined,
             });
           }
 
@@ -609,7 +733,7 @@ export const createRpc = ({
           bucket.isWarmingUp = false;
           bucket.reactivationDelay = INITIAL_REACTIVATION_DELAY;
 
-          return response as RequestReturnType<typeof body.method>;
+          return response;
         } catch (e) {
           const error = e as Error;
 
@@ -626,9 +750,6 @@ export const createRpc = ({
             fromBlockParam?.block_number !== undefined &&
             toBlockParam?.block_number !== undefined
           ) {
-            // Starknet uses starknet_getEvents with pagination (continuation_token)
-            // which handles large ranges automatically. However, some providers may
-            // still reject very large ranges, so we handle retries here.
             const fromBlock = fromBlockParam.block_number;
             const toBlock = toBlockParam.block_number;
             const getLogsErrorResponse = getLogsRetryHelper({
@@ -755,7 +876,6 @@ export const createRpc = ({
           await wait(duration);
         } finally {
           bucket.activeConnections--;
-
           clearTimeout(surpassTimeout);
         }
       }
@@ -772,8 +892,7 @@ export const createRpc = ({
 
   const rpc: Rpc = {
     hostnames: backends.map((backend) => backend.hostname),
-    // @ts-ignore
-    request: (parameters, context) => queue.add({ body: parameters, context }),
+    request: (parameters, context) => queue.add({ body: parameters, context }) as Promise<any>,
     subscribe({ onBlock, onError }) {
       (async () => {
         while (true) {
@@ -792,7 +911,6 @@ export const createRpc = ({
                 const block = await _starknet_getBlockByNumber(rpc, {
                   blockTag: "latest",
                 });
-                // block.number is now a plain number, not hex
                 common.logger.trace({
                   msg: "Received successful JSON-RPC polling response",
                   chain: chain.name,
@@ -800,7 +918,6 @@ export const createRpc = ({
                   block_number: block.number,
                   block_hash: block.hash,
                 });
-                // Note: `onBlock` should never throw.
                 await onBlock(block);
               } catch (error) {
                 onError(error as Error);
@@ -823,8 +940,6 @@ export const createRpc = ({
                 chain_id: chain.id,
               });
 
-              // Starknet WebSocket subscription for new blocks
-              // Some providers support starknet_subscribeNewHeads (Pathfinder, Juno)
               const subscriptionRequest = {
                 jsonrpc: "2.0",
                 id: 1,
@@ -838,7 +953,6 @@ export const createRpc = ({
             ws.on("message", (data: Buffer) => {
               try {
                 const msg = JSON.parse(data.toString());
-                // Starknet subscription notification format
                 if (
                   msg.method === "starknet_subscriptionNewHeads" &&
                   msg.params?.subscription_id === subscriptionId
@@ -855,7 +969,6 @@ export const createRpc = ({
 
                   onBlock(standardizeBlock(result, "newHeads", true));
                 } else if (msg.result?.subscription_id) {
-                  // Starknet subscription success response
                   common.logger.debug({
                     msg: "Created JSON-RPC WebSocket subscription",
                     chain: chain.name,
@@ -1007,30 +1120,18 @@ export const createRpc = ({
   return rpc;
 };
 
-/**
- * @link https://github.com/wevm/viem/blob/main/src/utils/buildtask.ts#L192
- */
 function shouldRetry(error: Error) {
   if ("code" in error && typeof error.code === "number") {
-    // Invalid JSON
-    if (error.code === ParseRpcError.code) return false;
-    // Method does not exist
-    if (error.code === MethodNotFoundRpcError.code) return false;
-    // Method is not implemented
-    if (error.code === MethodNotSupportedRpcError.code) return false;
-    // Version of JSON-RPC protocol is not supported
-    if (error.code === JsonRpcVersionUnsupportedError.code) return false;
-    // eth_call reverted
+    if (error.code === RPC_ERROR_CODES.PARSE_ERROR) return false;
+    if (error.code === RPC_ERROR_CODES.METHOD_NOT_FOUND) return false;
+    if (error.code === RPC_ERROR_CODES.METHOD_NOT_SUPPORTED) return false;
+    if (error.code === RPC_ERROR_CODES.JSON_RPC_VERSION_UNSUPPORTED) return false;
     if (error.message.includes("revert")) return false;
   }
   if (error instanceof HttpRequestError && error.status) {
-    // Method Not Allowed
     if (error.status === 405) return false;
-    // Not Found
     if (error.status === 404) return false;
-    // Not Implemented
     if (error.status === 501) return false;
-    // HTTP Version Not Supported
     if (error.status === 505) return false;
   }
   return true;
