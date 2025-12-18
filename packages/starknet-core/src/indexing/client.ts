@@ -27,10 +27,9 @@ import {
   createClient,
   custom,
   publicActions,
-  toHex,
 } from "starkweb2";
 import { compile, calldataToHex } from "starkweb2/utils";
-import { keccak } from "@scure/starknet";
+import { selector, num } from "starknet";
 import type {
   ReadContractsParameters,
   ReadContractParameters,
@@ -443,37 +442,9 @@ export const getCacheKey = (request: RequestParameters) => {
   return toLowerCase(JSON.stringify(orderObject(request)));
 };
 
-/**
- * Compute Starknet selector from function name using starknet_keccak.
- * This matches starkweb's getSelectorFromName implementation.
- */
-
-// Helper function to convert string to UTF-8 array (matches starkweb's utf8ToArray)
-const utf8ToArray = (str: string): Uint8Array => {
-  return new TextEncoder().encode(str);
-};
-
-// Helper function to add hex prefix (matches starkweb's addHexPrefix)
-const addHexPrefix = (hex: string): string => {
-  return hex.startsWith("0x") ? hex : `0x${hex}`;
-};
-
-// keccakHex function (matches starkweb's implementation)
-const keccakHex = (str: string): string => {
-  return addHexPrefix(keccak(utf8ToArray(str)).toString(16));
-};
-
-// starknetKeccak function (matches starkweb's implementation)
-const starknetKeccak = (str: string): bigint => {
-  // MASK_250 = 2^250 - 1
-  const MASK_250 = (1n << 250n) - 1n;
-  const hash = BigInt(keccakHex(str));
-  return hash & MASK_250;
-};
-
-// getSelectorFromName (matches starkweb's implementation)
+/** Compute selector from function name */
 const getStarknetSelector = (funcName: string): string => {
-  return toHex(starknetKeccak(funcName));
+  return num.toHex(selector.getSelectorFromName(funcName));
 };
 
 // Removed: encodeRequest (EVM-only function, not needed for Starknet)
