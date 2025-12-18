@@ -1,4 +1,4 @@
-import { type Abi, parseAbiItem } from "starkweb2";
+import { type Abi, parseAbiItem } from "viem";
 import { assertType, test } from "vitest";
 import { factory } from "./address.js";
 import { createConfig } from "./index.js";

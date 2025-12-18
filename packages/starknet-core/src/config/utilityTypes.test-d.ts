@@ -1,5 +1,4 @@
-import type { AbiEvent, AbiFunction, ParseAbiItem } from "abitype";
-import type { Abi } from "starkweb2";
+import type { Abi, AbiEvent, AbiFunction, ParseAbiItem } from "abitype";
 import { assertType, test } from "vitest";
 import type {
   ExtractAbiEvents,

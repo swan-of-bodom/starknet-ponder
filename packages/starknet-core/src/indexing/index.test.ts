@@ -15,7 +15,7 @@ import {
 } from "@/_test/utils.js";
 import { onchainTable } from "@/drizzle/onchain.js";
 import type { IndexingCache } from "@/indexing-store/cache.js";
-import { createCachedViemClient } from "@/indexing/client.js";
+import { createCachedStarknetJsClient } from "@/indexing/client.js";
 import {
   InvalidEventAccessError,
   type RetryableError,
@@ -75,7 +75,7 @@ test("createIndexing()", async (context) => {
     indexingBuild: { indexingFunctions },
   });
 
-  const cachedViemClient = createCachedViemClient({
+  const cachedStarknetJsClient = createCachedStarknetJsClient({
     common,
     indexingBuild: { chains: [chain], rpcs: [rpc] },
     syncStore,
@@ -89,7 +89,7 @@ test("createIndexing()", async (context) => {
       chains: [chain],
       indexingFunctions,
     },
-    client: cachedViemClient,
+    client: cachedStarknetJsClient,
     eventCount,
     indexingErrorHandler,
     columnAccessPattern,
@@ -116,7 +116,7 @@ test("processSetupEvents() empty", async (context) => {
     indexingBuild: { indexingFunctions },
   });
 
-  const cachedViemClient = createCachedViemClient({
+  const cachedStarknetJsClient = createCachedStarknetJsClient({
     common,
     indexingBuild: { chains: [chain], rpcs: [rpc] },
     syncStore,
@@ -130,7 +130,7 @@ test("processSetupEvents() empty", async (context) => {
       chains: [chain],
       indexingFunctions,
     },
-    client: cachedViemClient,
+    client: cachedStarknetJsClient,
     eventCount,
     indexingErrorHandler,
     columnAccessPattern,
@@ -157,7 +157,7 @@ test("processSetupEvents()", async (context) => {
     indexingBuild: { indexingFunctions },
   });
 
-  const cachedViemClient = createCachedViemClient({
+  const cachedStarknetJsClient = createCachedStarknetJsClient({
     common,
     indexingBuild: { chains: [chain], rpcs: [rpc] },
     syncStore,
@@ -171,7 +171,7 @@ test("processSetupEvents()", async (context) => {
       chains: [chain],
       indexingFunctions,
     },
-    client: cachedViemClient,
+    client: cachedStarknetJsClient,
     eventCount,
     indexingErrorHandler,
     columnAccessPattern,
@@ -223,7 +223,7 @@ test("processEvent()", async (context) => {
     indexingBuild: { indexingFunctions },
   });
 
-  const cachedViemClient = createCachedViemClient({
+  const cachedStarknetJsClient = createCachedStarknetJsClient({
     common,
     indexingBuild: { chains: [chain], rpcs: [rpc] },
     syncStore,
@@ -237,7 +237,7 @@ test("processEvent()", async (context) => {
       chains: [chain],
       indexingFunctions,
     },
-    client: cachedViemClient,
+    client: cachedStarknetJsClient,
     eventCount,
     indexingErrorHandler,
     columnAccessPattern,
@@ -290,7 +290,7 @@ test("processEvents eventCount", async (context) => {
     indexingBuild: { indexingFunctions },
   });
 
-  const cachedViemClient = createCachedViemClient({
+  const cachedStarknetJsClient = createCachedStarknetJsClient({
     common,
     indexingBuild: { chains: [chain], rpcs: [rpc] },
     syncStore,
@@ -304,7 +304,7 @@ test("processEvents eventCount", async (context) => {
       chains: [chain],
       indexingFunctions,
     },
-    client: cachedViemClient,
+    client: cachedStarknetJsClient,
     eventCount,
     indexingErrorHandler,
     columnAccessPattern,
@@ -360,7 +360,7 @@ test.skip("executeSetup() context.client", async (context) => {
     indexingBuild: { indexingFunctions },
   });
 
-  const cachedViemClient = createCachedViemClient({
+  const cachedStarknetJsClient = createCachedStarknetJsClient({
     common,
     indexingBuild: { chains: [chain], rpcs: [rpc] },
     syncStore,
@@ -374,7 +374,7 @@ test.skip("executeSetup() context.client", async (context) => {
       chains: [chain],
       indexingFunctions,
     },
-    client: cachedViemClient,
+    client: cachedStarknetJsClient,
     eventCount,
     indexingErrorHandler,
     columnAccessPattern,
@@ -422,7 +422,7 @@ test("executeSetup() context.db", async (context) => {
     indexingBuild: { indexingFunctions },
   });
 
-  const cachedViemClient = createCachedViemClient({
+  const cachedStarknetJsClient = createCachedStarknetJsClient({
     common,
     indexingBuild: { chains: [chain], rpcs: [rpc] },
     syncStore,
@@ -436,7 +436,7 @@ test("executeSetup() context.db", async (context) => {
       chains: [chain],
       indexingFunctions,
     },
-    client: cachedViemClient,
+    client: cachedStarknetJsClient,
     eventCount,
     indexingErrorHandler,
     columnAccessPattern,
@@ -474,7 +474,7 @@ test("executeSetup() metrics", async (context) => {
     indexingBuild: { indexingFunctions },
   });
 
-  const cachedViemClient = createCachedViemClient({
+  const cachedStarknetJsClient = createCachedStarknetJsClient({
     common,
     indexingBuild: { chains: [chain], rpcs: [rpc] },
     syncStore,
@@ -488,7 +488,7 @@ test("executeSetup() metrics", async (context) => {
       sources,
       chains: [chain],
     },
-    client: cachedViemClient,
+    client: cachedStarknetJsClient,
     eventCount,
     indexingErrorHandler,
     columnAccessPattern,
@@ -519,7 +519,7 @@ test("executeSetup() error", async (context) => {
     indexingBuild: { indexingFunctions },
   });
 
-  const cachedViemClient = createCachedViemClient({
+  const cachedStarknetJsClient = createCachedStarknetJsClient({
     common,
     indexingBuild: { chains: [chain], rpcs: [rpc] },
     syncStore,
@@ -533,7 +533,7 @@ test("executeSetup() error", async (context) => {
       chains: [chain],
       indexingFunctions,
     },
-    client: cachedViemClient,
+    client: cachedStarknetJsClient,
     eventCount,
     indexingErrorHandler,
     columnAccessPattern,
@@ -583,7 +583,7 @@ test.skip("processEvents() context.client", async (context) => {
     indexingBuild: { indexingFunctions },
   });
 
-  const cachedViemClient = createCachedViemClient({
+  const cachedStarknetJsClient = createCachedStarknetJsClient({
     common,
     indexingBuild: { chains: [chain], rpcs: [rpc] },
     syncStore,
@@ -597,7 +597,7 @@ test.skip("processEvents() context.client", async (context) => {
       sources,
       chains: [chain],
     },
-    client: cachedViemClient,
+    client: cachedStarknetJsClient,
     eventCount,
     indexingErrorHandler,
     columnAccessPattern,
@@ -658,7 +658,7 @@ test("processEvents() context.db", async (context) => {
     indexingBuild: { indexingFunctions },
   });
 
-  const cachedViemClient = createCachedViemClient({
+  const cachedStarknetJsClient = createCachedStarknetJsClient({
     common,
     indexingBuild: { chains: [chain], rpcs: [rpc] },
     syncStore,
@@ -672,7 +672,7 @@ test("processEvents() context.db", async (context) => {
       sources,
       chains: [chain],
     },
-    client: cachedViemClient,
+    client: cachedStarknetJsClient,
     eventCount,
     indexingErrorHandler,
     columnAccessPattern,
@@ -717,7 +717,7 @@ test("processEvents() metrics", async (context) => {
     indexingBuild: { indexingFunctions },
   });
 
-  const cachedViemClient = createCachedViemClient({
+  const cachedStarknetJsClient = createCachedStarknetJsClient({
     common,
     indexingBuild: { chains: [chain], rpcs: [rpc] },
     syncStore,
@@ -731,7 +731,7 @@ test("processEvents() metrics", async (context) => {
       sources,
       chains: [chain],
     },
-    client: cachedViemClient,
+    client: cachedStarknetJsClient,
     eventCount,
     indexingErrorHandler,
     columnAccessPattern,
@@ -772,7 +772,7 @@ test("processEvents() error", async (context) => {
     indexingBuild: { indexingFunctions },
   });
 
-  const cachedViemClient = createCachedViemClient({
+  const cachedStarknetJsClient = createCachedStarknetJsClient({
     common,
     indexingBuild: { chains: [chain], rpcs: [rpc] },
     syncStore,
@@ -786,7 +786,7 @@ test("processEvents() error", async (context) => {
       chains: [chain],
       indexingFunctions,
     },
-    client: cachedViemClient,
+    client: cachedStarknetJsClient,
     eventCount,
     indexingErrorHandler,
     columnAccessPattern,
@@ -844,7 +844,7 @@ test("processEvents() error with missing event object properties", async (contex
     indexingBuild: { indexingFunctions },
   });
 
-  const cachedViemClient = createCachedViemClient({
+  const cachedStarknetJsClient = createCachedStarknetJsClient({
     common,
     indexingBuild: { chains: [chain], rpcs: [rpc] },
     syncStore,
@@ -858,7 +858,7 @@ test("processEvents() error with missing event object properties", async (contex
       sources,
       chains: [chain],
     },
-    client: cachedViemClient,
+    client: cachedStarknetJsClient,
     eventCount,
     indexingErrorHandler,
     columnAccessPattern,
@@ -914,7 +914,7 @@ test("processEvents() column selection", async (context) => {
     indexingBuild: { indexingFunctions },
   });
 
-  const cachedViemClient = createCachedViemClient({
+  const cachedStarknetJsClient = createCachedStarknetJsClient({
     common,
     indexingBuild: { chains: [chain], rpcs: [rpc] },
     syncStore,
@@ -928,7 +928,7 @@ test("processEvents() column selection", async (context) => {
       chains: [chain],
       indexingFunctions,
     },
-    client: cachedViemClient,
+    client: cachedStarknetJsClient,
     eventCount,
     indexingErrorHandler,
     columnAccessPattern,
@@ -1005,15 +1005,15 @@ test("ponderActions getBalance() via balance_of", async (context) => {
 
   const event = getSimulatedEvent({ source: sources[0], blockData });
 
-  const cachedViemClient = createCachedViemClient({
+  const cachedStarknetJsClient = createCachedStarknetJsClient({
     common,
     indexingBuild: { chains: [chain], rpcs: [rpc] },
     syncStore,
     eventCount,
   });
-  cachedViemClient.event = event;
+  cachedStarknetJsClient.event = event;
 
-  const client = cachedViemClient.getClient(chain);
+  const client = cachedStarknetJsClient.getClient(chain);
 
   // Starknet uses balance_of on token contracts
   // Use cache: "immutable" to avoid block number issues with devnet
@@ -1054,20 +1054,20 @@ test("ponderActions getCode() via getClassHashAt", async (context) => {
 
   const event = getSimulatedEvent({ source: sources[0], blockData });
 
-  const cachedViemClient = createCachedViemClient({
+  const cachedStarknetJsClient = createCachedStarknetJsClient({
     common,
     indexingBuild: { chains: [chain], rpcs: [rpc] },
     syncStore,
     eventCount,
   });
 
-  cachedViemClient.event = event;
+  cachedStarknetJsClient.event = event;
 
-  const client = cachedViemClient.getClient(chain);
+  const client = cachedStarknetJsClient.getClient(chain);
 
   // Starknet uses getClassHashAt to check if contract is deployed
   const classHash = await client.getClassHashAt({
-    contract_address: address, // snake_case per starkweb2 API
+    address, // camelCase per starknetjs API
   });
 
   expect(classHash).toBeTruthy();
@@ -1099,20 +1099,20 @@ test.skip("ponderActions getStorageAt()", async (context) => {
 
   const event = getSimulatedEvent({ source: sources[0], blockData });
 
-  const cachedViemClient = createCachedViemClient({
+  const cachedStarknetJsClient = createCachedStarknetJsClient({
     common,
     indexingBuild: { chains: [chain], rpcs: [rpc] },
     syncStore,
     eventCount,
   });
-  cachedViemClient.event = event;
+  cachedStarknetJsClient.event = event;
 
-  const client = cachedViemClient.getClient(chain);
+  const client = cachedStarknetJsClient.getClient(chain);
 
   const storage = await client.getStorageAt({
     address,
     // totalSupply is in the third storage slot
-    slot: toHex(2),
+    key: toHex(2),
   });
 
   expect(BigInt(storage!)).toBe(parseEther("1"));
@@ -1144,16 +1144,16 @@ test("ponderActions readContract()", async (context) => {
 
   const event = getSimulatedEvent({ source: sources[0], blockData });
 
-  const cachedViemClient = createCachedViemClient({
+  const cachedStarknetJsClient = createCachedStarknetJsClient({
     common,
     indexingBuild: { chains: [chain], rpcs: [rpc] },
     syncStore,
     eventCount,
   });
 
-  cachedViemClient.event = event;
+  cachedStarknetJsClient.event = event;
 
-  const client = cachedViemClient.getClient(chain);
+  const client = cachedStarknetJsClient.getClient(chain);
 
   // Use cache: "immutable" to avoid block number issues with devnet
   const totalSupply = await client.readContract({
@@ -1194,15 +1194,15 @@ test("ponderActions readContract() blockNumber", async (context) => {
 
   const event = getSimulatedEvent({ source: sources[0], blockData });
 
-  const cachedViemClient = createCachedViemClient({
+  const cachedStarknetJsClient = createCachedStarknetJsClient({
     common,
     indexingBuild: { chains: [chain], rpcs: [rpc] },
     syncStore,
     eventCount,
   });
-  cachedViemClient.event = event;
+  cachedStarknetJsClient.event = event;
 
-  const client = cachedViemClient.getClient(chain);
+  const client = cachedStarknetJsClient.getClient(chain);
 
   // Read at current block (after mint)
   // Use cache: "immutable" to avoid block number issues with devnet
@@ -1243,15 +1243,15 @@ test("ponderActions readContract() retries on empty response", async (context) =
 
   const event = getSimulatedEvent({ source: sources[0], blockData });
 
-  const cachedViemClient = createCachedViemClient({
+  const cachedStarknetJsClient = createCachedStarknetJsClient({
     common,
     indexingBuild: { chains: [chain], rpcs: [rpc] },
     syncStore,
     eventCount,
   });
-  cachedViemClient.event = event;
+  cachedStarknetJsClient.event = event;
 
-  const client = cachedViemClient.getClient(chain);
+  const client = cachedStarknetJsClient.getClient(chain);
 
   // Should successfully read without mocking
   // Use cache: "immutable" to avoid block number issues with devnet
@@ -1291,15 +1291,15 @@ test("ponderActions multicall()", async (context) => {
 
   const event = getSimulatedEvent({ source: sources[0], blockData });
 
-  const cachedViemClient = createCachedViemClient({
+  const cachedStarknetJsClient = createCachedStarknetJsClient({
     common,
     indexingBuild: { chains: [chain], rpcs: [rpc] },
     syncStore,
     eventCount,
   });
-  cachedViemClient.event = event;
+  cachedStarknetJsClient.event = event;
 
-  const client = cachedViemClient.getClient(chain);
+  const client = cachedStarknetJsClient.getClient(chain);
 
   // Use readContracts for batched reads (Starknet equivalent of multicall)
   // Use cache: "immutable" to avoid block number issues with devnet
@@ -1351,15 +1351,15 @@ test("ponderActions multicall() allowFailure", async (context) => {
 
   const event = getSimulatedEvent({ source: sources[0], blockData });
 
-  const cachedViemClient = createCachedViemClient({
+  const cachedStarknetJsClient = createCachedStarknetJsClient({
     common,
     indexingBuild: { chains: [chain], rpcs: [rpc] },
     syncStore,
     eventCount,
   });
-  cachedViemClient.event = event;
+  cachedStarknetJsClient.event = event;
 
-  const client = cachedViemClient.getClient(chain);
+  const client = cachedStarknetJsClient.getClient(chain);
 
   // Use readContracts for batched reads
   // Use cache: "immutable" to avoid block number issues with devnet

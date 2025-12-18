@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 
-import { parseAbiParameter } from "starkweb2";
+import { parseAbiParameter } from "viem";
 import {
   type TupleAbiParameter,
   getBytesConsumedByParam,

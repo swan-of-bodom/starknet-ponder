@@ -29,9 +29,9 @@ beforeEach(setupAnvil);
 beforeEach(setupIsolatedDatabase);
 beforeEach(setupCleanup);
 
-// TODO: Skip - starkweb2 client.request() hangs after devnet restart
+// TODO: Skip - client.request() hangs after devnet restart
 // The restart happens in beforeEach via testClient.revert() which calls devnetProvider.restart()
-// This may invalidate starkweb2's internal connection state
+// This may invalidate internal connection state
 test.skip("request() block dependent method", async (context) => {
   const chain = getChain();
   const rpc = createRpc({
@@ -175,8 +175,8 @@ test("request() non-cached method", async (context) => {
   expect(getSpy).toHaveBeenCalledTimes(0);
 });
 
-// TODO: Skip - starkweb2's readContracts hangs when calling devnet
-// Need to investigate if this is a starkweb2 issue or devnet configuration
+// TODO: Skip - readContracts hangs when calling devnet
+// Need to investigate if this is a devnet configuration issue
 test.skip("readContracts() batched reads", async (context) => {
   const chain = getChain();
   const rpc = createRpc({
@@ -226,7 +226,7 @@ test.skip("readContracts() batched reads", async (context) => {
   });
 
   expect(results).toHaveLength(2);
-  // starkweb2's readContracts returns raw values (not wrapped in status objects)
+  // readContracts returns raw values (not wrapped in status objects)
   expect(results[0]).toBeDefined();
   expect(results[1]).toBeDefined();
 }, 30000); // Increase timeout for devnet transaction
@@ -308,7 +308,7 @@ test.skip("prefetch() uses profile metadata", async (context) => {
     address,
   });
 
-  // starkweb2's readContract may return { data: ... } or raw value
+  // readContract may return { data: ... } or raw value
   expect(result).toBeDefined();
 
   event.event.block.number = 2n;
@@ -418,7 +418,7 @@ test("readContract() with immutable cache", async (context) => {
     cache: "immutable",
   });
 
-  // starkweb2's readContract returns { data: ... } or raw value depending on ABI
+  // readContract returns { data: ... } or raw value depending on ABI
   expect(result).toBeDefined();
 
   expect(requestSpy).toBeCalledWith(
@@ -505,7 +505,7 @@ test.skip("getBlock() action retry", async (context) => {
 
   cachedViemClient.event = event;
 
-  // Use RPC request instead of getBlock() method which doesn't exist in starkweb2
+  // Use RPC request to get block data
   await cachedViemClient.getClient(chain).request({
     method: "starknet_getBlockWithTxs",
     params: { block_id: { block_number: 1 } },

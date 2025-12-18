@@ -5,7 +5,7 @@ import {
   getAbiItem,
   parseAbiParameters,
   zeroAddress,
-} from "starkweb2";
+} from "viem";
 import { assertType, describe, expect, test } from "vitest";
 import { decodeAbiParameters } from "./decodeAbiParameters.js";
 import { toLowerCase } from "./lowercase.js";

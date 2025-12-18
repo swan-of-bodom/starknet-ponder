@@ -2,7 +2,7 @@ import { ALICE } from "@/_test/constants.js";
 import { erc20ABI } from "@/_test/generated.js";
 import type { BlockEvent, LogEvent, TraceEvent } from "@/internal/types.js";
 import { ZERO_CHECKPOINT_STRING } from "@/utils/checkpoint.js";
-import { getAbiItem } from "starkweb2";
+import { getAbiItem } from "viem";
 import { zeroAddress } from "@/utils/hex.js";
 import { expect, test } from "vitest";
 import { recordProfilePattern, recoverProfilePattern } from "./profile.js";
