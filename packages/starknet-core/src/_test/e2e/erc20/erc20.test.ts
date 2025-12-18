@@ -10,7 +10,8 @@ import { getFreePort, waitForIndexedBlock } from "@/_test/utils.js";
 import { start } from "@/bin/commands/start.js";
 import { createClient } from "@ponder/client";
 import { rimrafSync } from "rimraf";
-import { parseEther, zeroAddress } from "starkweb2";
+import { zeroAddress } from "@/utils/hex.js";
+import { parseEther } from "@/utils/units.js";
 import { beforeEach, expect, test } from "vitest";
 import * as schema from "./ponder.schema.js";
 

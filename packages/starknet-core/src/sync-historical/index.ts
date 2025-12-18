@@ -50,16 +50,10 @@ import {
   intervalRange,
   intervalUnion,
 } from "@/utils/interval.js";
-import { toHex64 } from "@/utils/hex.js";
+import { toHex64, toHex, zeroHash } from "@/utils/hex.js";
+import type { Address, Hash } from "@/utils/hex.js";
 import { startClock } from "@/utils/timer.js";
-import { getLogsRetryHelper } from "@ponder/utils";
-import {
-  type Address,
-  type Hash,
-  type RpcError,
-  toHex,
-  zeroHash,
-} from "starkweb2";
+import { getLogsRetryHelper, type RpcError } from "@ponder/utils";
 
 export type HistoricalSync = {
   /**

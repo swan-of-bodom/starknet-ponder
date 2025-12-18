@@ -1,4 +1,5 @@
-import { toBytes, zeroAddress } from "starkweb2";
+import { num } from "starknet";
+import { zeroAddress } from "@/utils/hex.js";
 import { expect, test } from "vitest";
 import { copy, copyOnWrite } from "./copy.js";
 
@@ -82,7 +83,7 @@ test("copy", () => {
 test("copy bytes", () => {
   const obj = {
     address: zeroAddress,
-    calldata: toBytes(zeroAddress),
+    calldata: num.hexToBytes(zeroAddress),
   };
   const copiedObj = copyOnWrite(obj);
   const copiedObj2 = copy(copiedObj);

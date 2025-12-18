@@ -1,11 +1,11 @@
+import type {
+  AbiParameter,
+  AbiParameterToPrimitiveType,
+} from "abitype";
 import {
-  type AbiParameter,
-  type AbiParameterToPrimitiveType,
   type DecodeAbiParametersReturnType,
   type Hex,
   InvalidHexBooleanError,
-} from "starkweb2";
-import {
   AbiDecodingDataSizeTooSmallError,
   AbiDecodingZeroDataError,
   InvalidAbiDecodingTypeError,
@@ -13,7 +13,7 @@ import {
   hexToBigInt,
   hexToNumber,
   hexToString,
-} from "starkweb2";
+} from "viem";
 
 const TRUE_BOOL =
   "0x0000000000000000000000000000000000000000000000000000000000000001" as const;

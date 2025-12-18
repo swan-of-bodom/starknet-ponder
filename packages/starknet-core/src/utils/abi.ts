@@ -6,7 +6,7 @@
 
 import { computeEventSelector } from "./event-selector.js";
 import { getDuplicateElements } from "./duplicates.js";
-import type { Hex } from "starkweb2";
+import type { Hex } from "./hex.js";
 import type {
   StarknetAbi,
   StarknetAbiEvent,

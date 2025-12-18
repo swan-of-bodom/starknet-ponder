@@ -1,4 +1,4 @@
-import type { Chain } from "starkweb2";
+import type { Chain } from "viem";
 
 /**
  * Returns the number of blocks that must pass before a block is considered final.

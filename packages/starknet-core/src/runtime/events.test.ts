@@ -18,7 +18,8 @@ import type {
 import { ZERO_CHECKPOINT_STRING } from "@/utils/checkpoint.js";
 import { computeEventSelector } from "@/utils/event-selector.js";
 import { toHex64 } from "@/utils/hex.js";
-import { parseEther, toHex, zeroAddress } from "starkweb2";
+import { toHex, zeroAddress } from "@/utils/hex.js";
+import { parseEther } from "@/utils/units.js";
 import { encodeFunctionData, encodeFunctionResult } from "viem/utils";
 import { beforeEach, expect, test } from "vitest";
 import { decodeEvents, splitEvents } from "./events.js";

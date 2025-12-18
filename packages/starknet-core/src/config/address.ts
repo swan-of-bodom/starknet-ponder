@@ -1,4 +1,4 @@
-import type { AbiEvent, AbiParameter } from "starkweb2";
+import type { AbiEvent, AbiParameter } from "abitype";
 
 // Note: Currently limit the depth to 1 level.
 type ParameterNames<T extends AbiParameter> = T extends {

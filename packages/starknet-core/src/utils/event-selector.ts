@@ -1,6 +1,6 @@
 import { selector } from "starknet";
-import type { Address, Hex } from "starkweb2";
 import { toHex64 } from "./hex.js";
+import type { Address, Hex } from "./hex.js";
 
 /** Compute Starknet event selector from event name */
 export function computeEventSelector(eventName: string): Hex {

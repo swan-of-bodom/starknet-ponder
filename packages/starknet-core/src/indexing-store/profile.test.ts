@@ -2,7 +2,7 @@ import { onchainTable } from "@/drizzle/onchain.js";
 import type { BlockEvent, LogEvent, TraceEvent } from "@/internal/types.js";
 import { ZERO_CHECKPOINT_STRING } from "@/utils/checkpoint.js";
 import type { Column, Table } from "drizzle-orm";
-import { zeroAddress } from "starkweb2";
+import { zeroAddress } from "@/utils/hex.js";
 import { expect, test } from "vitest";
 import { recordProfilePattern, recoverProfilePattern } from "./profile.js";
 

@@ -14,8 +14,8 @@ import {
 import { EVENT_TYPES, encodeCheckpoint } from "@/utils/checkpoint.js";
 import { relations } from "drizzle-orm";
 import { type GraphQLType, execute, parse } from "graphql";
-import { toBytes } from "starkweb2";
-import { zeroAddress } from "starkweb2";
+import { num } from "starknet";
+import { zeroAddress } from "@/utils/hex.js";
 import { beforeEach, expect, test, vi } from "vitest";
 import { buildDataLoaderCache, buildGraphQLSchema } from "./index.js";
 
@@ -148,7 +148,7 @@ test("scalar, scalar not null, scalar array, scalar array not null", async (cont
     boolean: false,
     hex: "0x0",
     bigint: 0n,
-    bytes: toBytes(zeroAddress),
+    bytes: num.hexToBytes(zeroAddress),
 
     stringNotNull: "0",
     intNotNull: 0,
@@ -156,7 +156,7 @@ test("scalar, scalar not null, scalar array, scalar array not null", async (cont
     booleanNotNull: false,
     hexNotNull: "0x0",
     bigintNotNull: 0n,
-    bytesNotNull: toBytes(zeroAddress),
+    bytesNotNull: num.hexToBytes(zeroAddress),
 
     stringArray: ["0"],
     intArray: [0],

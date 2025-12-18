@@ -28,7 +28,8 @@ import {
 import type { LogFilter } from "@/internal/types.js";
 import { orderObject } from "@/utils/order.js";
 import { sql } from "drizzle-orm";
-import { hexToBigInt, hexToNumber, parseEther, zeroAddress } from "starkweb2";
+import { hexToBigInt, hexToNumber, zeroAddress } from "@/utils/hex.js";
+import { parseEther } from "@/utils/units.js";
 import { beforeEach, expect, test } from "vitest";
 import * as ponderSyncSchema from "./schema.js";
 

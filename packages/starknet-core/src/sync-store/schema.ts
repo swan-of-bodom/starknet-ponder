@@ -6,7 +6,7 @@ import {
   primaryKey,
   unique,
 } from "drizzle-orm/pg-core";
-import type { Address, Hash, Hex } from "starkweb2";
+import type { Address, Hash, Hex } from "@/utils/hex.js";
 
 const nummultirange = (name: string) =>
   customType<{ data: string }>({

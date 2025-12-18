@@ -2,12 +2,12 @@ import type { LogFactory } from "@/internal/types.js";
 import type { StarknetAbiEvent } from "@/types/starknetAbi.js";
 import { dedupe } from "@/utils/dedupe.js";
 import { toHex64 } from "@/utils/hex.js";
+import type { Address } from "@/utils/hex.js";
 import {
   type TupleAbiParameter,
   getBytesConsumedByParam,
   getNestedParamOffset,
 } from "@/utils/offset.js";
-import type { Address } from "starkweb2";
 import { computeEventSelector } from "@/utils/event-selector.js";
 
 const isKey = (member: { kind?: string; indexed?: boolean }): boolean => {

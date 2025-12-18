@@ -19,7 +19,7 @@ import {
 import { wait } from "@/utils/wait.js";
 import { and, eq, sql } from "drizzle-orm";
 import { index } from "drizzle-orm/pg-core";
-import { zeroAddress } from "starkweb2";
+import { zeroAddress } from "@/utils/hex.js";
 import { beforeEach, expect, test, vi } from "vitest";
 import { commitBlock, createIndexes, createTriggers } from "./actions.js";
 import {

@@ -1,6 +1,6 @@
 import type { ConnectionOptions } from "node:tls";
 import type { Prettify } from "@/types/utils.js";
-import type { Narrow, Transport } from "starkweb2";
+import type { Narrow, Transport } from "viem";
 import type { AddressConfig } from "./address.js";
 import type { GetEventFilter } from "./eventFilter.js";
 import type { StarknetAbi } from "../types/starknetAbi.js";

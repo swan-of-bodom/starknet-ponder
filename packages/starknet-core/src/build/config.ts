@@ -27,12 +27,10 @@ import { chains as viemChains } from "@/utils/chains.js";
 import { dedupe } from "@/utils/dedupe.js";
 import { getFinalityBlockCount } from "@/utils/finality.js";
 import { toLowerCase } from "@/utils/lowercase.js";
-import {
-  BlockNotFoundError,
-  type Hex,
-  type LogTopic,
-  hexToNumber,
-} from "starkweb2";
+import { hexToNumber } from "@/utils/hex.js";
+import type { Hex } from "@/utils/hex.js";
+import type { LogTopic } from "viem";
+import { BlockNotFoundError } from "viem";
 import { normalizeAddress } from "@/utils/event-selector.js";
 import { buildLogFactory } from "./factory.js";
 

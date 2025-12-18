@@ -28,8 +28,8 @@ import {
 import { createRpc } from "@/rpc/index.js";
 import { getCachedIntervals } from "@/runtime/index.js";
 import * as ponderSyncSchema from "@/sync-store/schema.js";
-import { zeroAddress } from "starkweb2";
-import { parseEther } from "viem/utils";
+import { zeroAddress } from "@/utils/hex.js";
+import { parseEther } from "@/utils/units.js";
 import { beforeEach, expect, test, vi } from "vitest";
 import { createHistoricalSync } from "./index.js";
 

@@ -1,4 +1,4 @@
-import type { Address, Hash, Hex } from "starkweb2";
+import type { Address, Hash, Hex } from "viem";
 
 // ----------------
 // Block

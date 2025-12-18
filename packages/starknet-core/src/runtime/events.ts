@@ -43,16 +43,9 @@ import {
   encodeCheckpoint,
 } from "@/utils/checkpoint.js";
 import { decodeEventLog } from "@/utils/decodeEventLog.js";
-import { toHex64 } from "@/utils/hex.js";
+import { toHex64, hexToBigInt } from "@/utils/hex.js";
+import type { Address, Hash, Hex } from "@/utils/hex.js";
 import { never } from "@/utils/never.js";
-import {
-  type Address,
-  type Hash,
-  type Hex,
-  decodeFunctionData,
-  decodeFunctionResult,
-  hexToBigInt,
-} from "starkweb2";
 import {
   isAddressMatched,
   isBlockFilterMatched,
@@ -547,10 +540,6 @@ export const decodeEvents = (
   let logDecodeFailureCount = 0;
   let logDecodeSuccessCount = 0;
 
-  const traceDecodeFailureSelectors = new Set<Hex>();
-  let traceDecodeFailureCount = 0;
-  let traceDecodeSuccessCount = 0;
-
   for (const event of rawEvents) {
     const source = sources[event.sourceIndex]!;
 
@@ -618,69 +607,9 @@ export const decodeEvents = (
           }
 
           case "trace": {
-            const selector = event
-              .trace!.input.slice(0, 10)
-              .toLowerCase() as Hex;
-            const abiItem = (source.abiFunctions.bySelector as any)[selector];
-            if (abiItem === undefined) {
-              break;
-            }
-
-            const { item, safeName } = abiItem;
-
-            let decodedData: { args: readonly unknown[]; functionName: string };
-            let decodedResult: readonly unknown[];
-            try {
-              decodedData = decodeFunctionData({
-                abi: [item],
-                data: event.trace!.input,
-              });
-
-              decodedResult = decodeFunctionResult({
-                abi: [item],
-                data: event.trace!.output ?? "0x",
-                functionName: decodedData.functionName,
-              });
-              traceDecodeSuccessCount++;
-            } catch (err) {
-              traceDecodeFailureCount++;
-              if (!traceDecodeFailureSelectors.has(selector)) {
-                traceDecodeFailureSelectors.add(selector);
-                common.logger.debug({
-                  msg: "Failed to decode matched call trace using provided ABI item",
-                  chain: source.chain.name,
-                  chain_id: source.chain.id,
-                  function: safeName,
-                  block_number: event?.block?.number ?? "unknown",
-                  transaction_index: event.transaction?.transactionIndex,
-                  trace_index: event.trace?.traceIndex,
-                  input: event.trace?.input,
-                  output: event.trace?.output,
-                });
-              }
-              break;
-            }
-
-            events.push({
-              type: "trace",
-              chainId: event.chainId,
-              checkpoint: event.checkpoint,
-
-              // NOTE: `safename` includes ()
-              name: `${source.name}.${safeName}`,
-
-              event: {
-                id: event.checkpoint,
-                args: decodedData.args,
-                result: decodedResult,
-                trace: event.trace! as Trace,
-                block: event.block as Block,
-                transaction: event.transaction!,
-                transactionReceipt:
-                  event.transactionReceipt as TransactionReceipt,
-              },
-            });
-
+            // TODO: Trace decoding not implemented for Starknet
+            // Cairo function calls use a different calldata format than EVM ABI encoding
+            // Need to implement proper Starknet trace decoding using starknet.js
             break;
           }
 
@@ -772,13 +701,6 @@ export const decodeEvents = (
     });
   }
 
-  if (traceDecodeFailureCount > 0) {
-    common.logger.debug({
-      msg: "Event batch contained traces that could not be decoded",
-      failure_count: traceDecodeFailureCount,
-      success_count: traceDecodeSuccessCount,
-    });
-  }
 
   return events;
 };

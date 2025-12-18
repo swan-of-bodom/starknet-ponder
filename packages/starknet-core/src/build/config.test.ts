@@ -4,7 +4,7 @@ import { factory } from "@/config/address.js";
 import { createConfig } from "@/config/index.js";
 import type { LogFactory, LogFilter, TraceFilter } from "@/internal/types.js";
 import { computeEventSelector } from "@/utils/event-selector.js";
-import { type Address, zeroAddress } from "starkweb2";
+import { type Address, zeroAddress } from "@/utils/hex.js";
 import { beforeEach, expect, test } from "vitest";
 import {
   buildConfig,

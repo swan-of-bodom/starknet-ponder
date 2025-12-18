@@ -30,9 +30,9 @@ import type {
   TransactionKeys,
   TransactionReceipt,
 } from "@/types/starknet.js";
-import { toHex64 } from "@/utils/hex.js";
+import { toHex64, hexToNumber } from "@/utils/hex.js";
+import type { Address } from "@/utils/hex.js";
 import { toLowerCase } from "@/utils/lowercase.js";
-import { type Address, hexToNumber } from "starkweb2";
 
 /** Returns true if `address` is an address filter. */
 export const isAddressFactory = (

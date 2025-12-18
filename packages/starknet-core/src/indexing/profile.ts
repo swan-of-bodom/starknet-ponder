@@ -1,6 +1,6 @@
 import type { Event } from "@/internal/types.js";
 import { orderObject } from "@/utils/order.js";
-import type { Abi } from "starkweb2";
+import type { Abi } from "abitype";
 import type { ProfilePattern, Request } from "./client.js";
 
 export const getProfilePatternKey = (pattern: ProfilePattern): string => {

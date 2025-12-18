@@ -47,7 +47,8 @@ import type { SyncProgress } from "@/runtime/index.js";
 import { createLock } from "@/utils/mutex.js";
 import { range } from "@/utils/range.js";
 import { startClock } from "@/utils/timer.js";
-import { type Address, type Hash, zeroHash } from "starkweb2";
+import { zeroHash } from "@/utils/hex.js";
+import type { Address, Hash } from "@/utils/hex.js";
 import { isBlockInFilterRange } from "./bloom.js";
 
 export type RealtimeSync = {

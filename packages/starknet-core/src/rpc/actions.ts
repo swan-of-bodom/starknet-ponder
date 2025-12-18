@@ -19,9 +19,9 @@ import type {
   StarknetGetEventsResponse,
 } from "@/rpc/index.js";
 import type { Logger } from "@/internal/logger.js";
-import { toHex64 } from "@/utils/hex.js";
+import { toHex64, hexToBigInt, zeroHash } from "@/utils/hex.js";
+import type { Hash, Hex } from "@/utils/hex.js";
 import { PG_BIGINT_MAX, PG_INTEGER_MAX } from "@/utils/pg.js";
-import { type Hash, type Hex, hexToBigInt, zeroHash } from "starkweb2";
 
 /**
  * Replaces `eth_getBlockByNumber`.

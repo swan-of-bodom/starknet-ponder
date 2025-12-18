@@ -6,9 +6,8 @@ import type {
   SyncTransaction,
   SyncTransactionReceipt,
 } from "@/internal/types.js";
-import { toHex64 } from "@/utils/hex.js";
-import type { Hex } from "starkweb2";
-import { hexToBigInt } from "starkweb2";
+import { toHex64, hexToBigInt } from "@/utils/hex.js";
+import type { Hex } from "@/utils/hex.js";
 import type * as ponderSyncSchema from "./schema.js";
 
 export const encodeBlock = ({

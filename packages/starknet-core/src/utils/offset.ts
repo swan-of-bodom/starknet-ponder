@@ -1,5 +1,4 @@
 import type { AbiParameter } from "abitype";
-import { InvalidAbiDecodingTypeError } from "starkweb2";
 
 // Adapted from viem.
 // https://github.com/wagmi-dev/viem/blob/5c95fafceffe7f399b5b5ee32119e2d78a0c8acd/src/utils/abi/decodeEventLog.ts
@@ -58,9 +57,7 @@ export function getBytesConsumedByParam(param: AbiParameter): number {
     return 32;
   }
 
-  throw new InvalidAbiDecodingTypeError(param.type, {
-    docsPath: "/docs/contract/decodeAbiParameters",
-  });
+  throw new Error(`Invalid ABI type for decoding: ${param.type}`);
 }
 
 export type TupleAbiParameter = AbiParameter & {

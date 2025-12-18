@@ -57,7 +57,8 @@ import {
   sql,
 } from "drizzle-orm";
 import { type PgColumn, unionAll } from "drizzle-orm/pg-core";
-import { type Address, hexToNumber, isHex } from "starkweb2";
+import { hexToNumber, isHex } from "@/utils/hex.js";
+import type { Address } from "@/utils/hex.js";
 import {
   encodeBlock,
   encodeLog,

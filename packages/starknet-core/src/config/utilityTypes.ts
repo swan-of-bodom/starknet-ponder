@@ -5,7 +5,7 @@ import type {
   AbiParametersToPrimitiveTypes,
   FormatAbiItem,
 } from "abitype";
-import type { GetEventArgs, ParseAbiItem } from "starkweb2";
+import type { GetEventArgs, ParseAbiItem } from "viem";
 import type { StarknetAbi } from "../types/starknetAbi.js";
 
 export type NonStrictPick<T, K> = {

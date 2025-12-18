@@ -38,7 +38,7 @@ import {
 import { type Interval, intervalIntersection } from "@/utils/interval.js";
 import { promiseWithResolvers } from "@/utils/promiseWithResolvers.js";
 import { startClock } from "@/utils/timer.js";
-import { type Address } from "starkweb2";
+import type { Address } from "@/utils/hex.js";
 import type { ChildAddresses, SyncProgress } from "./index.js";
 import { getOmnichainCheckpoint } from "./omnichain.js";
 

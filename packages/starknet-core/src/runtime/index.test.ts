@@ -19,7 +19,7 @@ import { encodeCheckpoint } from "@/utils/checkpoint.js";
 import { drainAsyncGenerator } from "@/utils/generators.js";
 import type { Interval } from "@/utils/interval.js";
 import { promiseWithResolvers } from "@/utils/promiseWithResolvers.js";
-import { parseEther } from "starkweb2";
+import { parseEther } from "@/utils/units.js";
 import { beforeEach, expect, test } from "vitest";
 import {
   syncBlockToInternal,

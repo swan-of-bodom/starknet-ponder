@@ -24,7 +24,9 @@ import type {
 import { _starknet_getBlockByNumber } from "@/rpc/actions.js";
 import { createRpc } from "@/rpc/index.js";
 import { toHex64 } from "@/utils/hex.js";
-import { type Address, parseEther, zeroAddress, zeroHash } from "starkweb2";
+import type { Address } from "@/utils/hex.js";
+import { zeroAddress, zeroHash } from "@/utils/hex.js";
+import { parseEther } from "@/utils/units.js";
 import { beforeEach, expect, test } from "vitest";
 import {
   getChildAddress,

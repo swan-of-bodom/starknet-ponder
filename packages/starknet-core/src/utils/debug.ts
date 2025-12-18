@@ -1,4 +1,4 @@
-import type { Address, Hash, Hex, LogTopic } from "starkweb2";
+import type { Address, Hash, Hex, LogTopic } from "viem";
 
 /** @see https://github.com/alloy-rs/alloy/blob/main/crates/rpc-types-trace/src/geth/call.rs */
 /** @see https://github.com/alloy-rs/alloy/blob/main/crates/rpc-types-trace/src/common.rs */

@@ -1,4 +1,4 @@
-import { toEventSelector } from "starkweb2";
+import { toEventSelector } from "viem";
 import { describe, expect, test } from "vitest";
 import { decodeEventLog } from "./decodeEventLog.js";
 

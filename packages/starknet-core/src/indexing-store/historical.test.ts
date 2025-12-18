@@ -15,7 +15,8 @@ import {
 import type { IndexingErrorHandler } from "@/internal/types.js";
 import { eq } from "drizzle-orm";
 import { pgTable } from "drizzle-orm/pg-core";
-import { toBytes, zeroAddress } from "starkweb2";
+import { num } from "starknet";
+import { zeroAddress } from "@/utils/hex.js";
 import { beforeEach, expect, test } from "vitest";
 import { createIndexingCache } from "./cache.js";
 import { createHistoricalIndexingStore } from "./historical.js";
@@ -1428,7 +1429,7 @@ test("bytes", async (context) => {
 
     await indexingStore.insert(schema.account).values({
       address: zeroAddress,
-      calldata: toBytes(zeroAddress),
+      calldata: num.hexToBytes(zeroAddress),
     });
 
     const result = await indexingStore.find(schema.account, {

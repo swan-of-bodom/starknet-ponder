@@ -25,7 +25,7 @@ import type {
   LogTopic,
   Transport,
   Chain as ViemChain,
-} from "starkweb2";
+} from "viem";
 import type { StarknetAbi } from "../types/starknetAbi.js";
 import type { RetryableError } from "./errors.js";
 

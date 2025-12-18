@@ -57,7 +57,7 @@ import {
 import { dedupe } from "@/utils/dedupe.js";
 import { prettyPrint } from "@/utils/print.js";
 import { startClock } from "@/utils/timer.js";
-import type { Address } from "starkweb2";
+import type { Address } from "@/utils/hex.js";
 import type { StarknetAbi } from "@/types/starknetAbi.js";
 import { addStackTrace } from "./addStackTrace.js";
 

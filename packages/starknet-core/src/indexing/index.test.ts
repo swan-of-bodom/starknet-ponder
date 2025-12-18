@@ -22,7 +22,8 @@ import {
 } from "@/internal/errors.js";
 import type { IndexingErrorHandler } from "@/internal/types.js";
 import { createRpc } from "@/rpc/index.js";
-import { parseEther, toHex, zeroAddress } from "starkweb2";
+import { toHex, zeroAddress } from "@/utils/hex.js";
+import { parseEther } from "@/utils/units.js";
 import { beforeEach, expect, test, vi } from "vitest";
 import {
   type Context,

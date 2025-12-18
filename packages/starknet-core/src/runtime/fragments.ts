@@ -13,7 +13,7 @@ import type {
   TransferFilter,
 } from "@/internal/types.js";
 import { dedupe } from "@/utils/dedupe.js";
-import type { Address, Hex } from "starkweb2";
+import type { Address, Hex } from "@/utils/hex.js";
 import { isAddressFactory } from "./filter.js";
 
 export const isFragmentAddressFactory = (

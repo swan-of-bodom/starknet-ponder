@@ -19,7 +19,7 @@ import {
   getSimulatedEvent,
 } from "@/_test/utils.js";
 import { createRpc } from "@/rpc/index.js";
-import { parseEther } from "starkweb2";
+import { parseEther } from "@/utils/units.js";
 import { beforeEach, expect, test, vi } from "vitest";
 import { createCachedViemClient } from "./client.js";
 import { getEventCount } from "./index.js";

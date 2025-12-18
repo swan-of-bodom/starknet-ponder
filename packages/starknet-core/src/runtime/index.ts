@@ -24,7 +24,7 @@ import {
   intervalIntersectionMany,
   sortIntervals,
 } from "@/utils/interval.js";
-import type { Address } from "starkweb2";
+import type { Address } from "@/utils/hex.js";
 
 export type SyncProgress = {
   start: SyncBlock | LightBlock;

@@ -1,4 +1,5 @@
-import type { AbiEvent, Hex } from "starkweb2";
+import type { AbiEvent } from "abitype";
+import type { Hex } from "./hex.js";
 import {
   events,
   CallData,

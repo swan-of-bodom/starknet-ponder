@@ -1,5 +1,5 @@
 import type { Prettify } from "./utils.js";
-import type { Hash, Address } from "starkweb2";
+import type { Hash, Address } from "viem";
 
 export type StarknetAbiMember = {
   name: string;

@@ -27,7 +27,7 @@ import type { LogFactory, LogFilter } from "@/internal/types.js";
 import { _starknet_getBlockByNumber } from "@/rpc/actions.js";
 import { createRpc } from "@/rpc/index.js";
 import { drainAsyncGenerator } from "@/utils/generators.js";
-import { parseEther } from "starkweb2";
+import { parseEther } from "@/utils/units.js";
 import { beforeEach, expect, test, vi } from "vitest";
 import { type RealtimeSyncEvent, createRealtimeSync } from "./index.js";
 

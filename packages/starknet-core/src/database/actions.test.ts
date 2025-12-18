@@ -18,7 +18,7 @@ import {
 } from "@/utils/checkpoint.js";
 import { and, eq, sql } from "drizzle-orm";
 import { index } from "drizzle-orm/pg-core";
-import { zeroAddress } from "starkweb2";
+import { zeroAddress } from "@/utils/hex.js";
 import { beforeEach, expect, test } from "vitest";
 import {
   commitBlock,
