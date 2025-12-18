@@ -82,6 +82,13 @@ export { client } from "@/client/index.js";
 export { graphql } from "@/graphql/middleware.js";
 
 export {
+  formatUnits,
+  parseUnits,
+  formatEther,
+  parseEther,
+} from "@/utils/units.js";
+
+export {
   sql,
   eq,
   gt,
