@@ -48,7 +48,7 @@ import { createLock } from "@/utils/mutex.js";
 import { range } from "@/utils/range.js";
 import { startClock } from "@/utils/timer.js";
 import { type Address, type Hash, zeroHash } from "starkweb2";
-import { isFilterInBloom } from "./bloom.js";
+import { isBlockInFilterRange } from "./bloom.js";
 
 export type RealtimeSync = {
   /**
@@ -348,9 +348,9 @@ export const createRealtimeSync = (
     // Logs
     ////////
 
-    // Starknet doesn't have logsBloom, so check block range with isFilterInBloom
+    // Starknet doesn't have logsBloom, so just check block range
     const shouldRequestLogs = logFilters.some((filter) =>
-      isFilterInBloom({ block: maybeBlockHeader, filter }),
+      isBlockInFilterRange({ block: maybeBlockHeader, filter }),
     );
 
     let logs: SyncLog[] = [];
