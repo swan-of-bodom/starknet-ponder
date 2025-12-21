@@ -110,7 +110,7 @@ The auto-generated GraphQL API is available at `http://localhost:42069/graphql` 
 
 ## Original Ponder
 
-For EVM-based chains (Ethereum, Polygon, Arbitrum, etc.), use the original `ponder` package. The original functionality is fully preserved in this fork.
+For EVM-based chains (Ethereum, Polygon, Arbitrum, etc.), use the original `ponder` npm package. The original functionality is fully preserved in this fork but for the time being you're better off using the original ponder. Main reason we kept `/core` here is if one day we implement EVM + Starknet indexing in the same package.
 
 Visit [ponder.sh](https://ponder.sh) for the original Ponder documentation.
 
