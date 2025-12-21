@@ -1,21 +1,18 @@
-/**
- * Starknet.js based client for Ponder indexing
- *
- * Provides a clean API using starknet.js Contract pattern:
- *   const erc20 = context.client.contract(erc20ABI, address);
- *   const balance = await erc20.balanceOf(userAddress);
- */
-
 import type { Common } from "@/internal/common.js";
 import type { Chain, IndexingBuild, SetupEvent } from "@/internal/types.js";
 import type { Event } from "@/internal/types.js";
 import type { RequestParameters } from "@/rpc/index.js";
 import type { SyncStore } from "@/sync-store/index.js";
+import { dedupe } from "@/utils/dedupe.js";
 import { toLowerCase } from "@/utils/lowercase.js";
 import { orderObject } from "@/utils/order.js";
+import { startClock } from "@/utils/timer.js";
+import { wait } from "@/utils/wait.js";
 import {
   RpcProvider,
   Contract,
+  selector,
+  CallData,
   type Abi as StarknetAbi,
   type GetBlockResponse,
   type GetTransactionReceiptResponse,
@@ -23,54 +20,46 @@ import {
   BlockTag,
   type BlockIdentifier,
 } from "starknet";
+import {
+  getProfilePatternKey,
+  recordProfilePattern,
+  recoverProfilePattern,
+} from "./profile.js";
 
 // ============================================================================
 // ABI Type Extraction
 // ============================================================================
 
-/**
- * Extract interface items from Starknet ABI (Cairo 1 style)
- * Starknet ABIs nest functions inside interface items
- */
+// Cairo1
 type ExtractInterfaceItems<TAbi extends StarknetAbi> = Extract<
   TAbi[number],
   { type: "interface"; items: readonly any[] }
 >["items"][number];
 
-/**
- * Extract top-level functions from ABI (Cairo 0 style)
- */
+// Cairo0
 type ExtractTopLevelFunctions<TAbi extends StarknetAbi> = Extract<
   TAbi[number],
   { type: "function" }
 >;
 
-/**
- * Extract all functions from both interface items (Cairo 1) and top-level (Cairo 0)
- */
+/** Extract all functions from both interface items (Cairo 1) and top-level (Cairo 0) */
 type ExtractFunctions<TAbi extends StarknetAbi> =
   | Extract<ExtractInterfaceItems<TAbi>, { type: "function" }>
   | ExtractTopLevelFunctions<TAbi>;
 
-/**
- * Get a specific function by name
- */
+/** Get a specific function by name */
 type GetFunction<TAbi extends StarknetAbi, TName extends string> = Extract<
   ExtractFunctions<TAbi>,
   { name: TName }
 >;
 
-/**
- * Extract struct definitions from ABI
- */
+/** Extract struct definitions from ABI */
 type ExtractStructs<TAbi extends StarknetAbi> = Extract<
   TAbi[number],
   { type: "struct" }
 >;
 
-/**
- * Extract enum definitions from ABI
- */
+/** Extract enum definitions from ABI */
 type ExtractEnums<TAbi extends StarknetAbi> = Extract<
   TAbi[number],
   { type: "enum" }
@@ -80,130 +69,154 @@ type ExtractEnums<TAbi extends StarknetAbi> = Extract<
 // Starknet Type Mapping
 // ============================================================================
 
-/**
- * Map primitive Starknet/Cairo types to TypeScript types
- */
+// TODO: Use types.ts ?
+
+/** Map primitive Starknet/Cairo types to TypeScript types */
 type PrimitiveTypeLookup<T extends string> =
   // Unsigned integers
-  T extends "core::integer::u8" | "u8" ? number :
-  T extends "core::integer::u16" | "u16" ? number :
-  T extends "core::integer::u32" | "u32" ? number :
-  T extends "core::integer::u64" | "u64" ? bigint :
-  T extends "core::integer::u128" | "u128" ? bigint :
-  T extends "core::integer::u256" | "u256" ? bigint :
-  // Signed integers
-  T extends "core::integer::i8" | "i8" ? number :
-  T extends "core::integer::i16" | "i16" ? number :
-  T extends "core::integer::i32" | "i32" ? number :
-  T extends "core::integer::i64" | "i64" ? bigint :
-  T extends "core::integer::i128" | "i128" ? bigint :
-  // Core types
-  T extends "core::felt252" | "felt252" ? bigint :
-  T extends "core::bool" | "bool" ? boolean :
-  // Address types
-  T extends "core::starknet::contract_address::ContractAddress" | "ContractAddress" ? string :
-  T extends "core::starknet::class_hash::ClassHash" | "ClassHash" ? string :
-  T extends "core::starknet::eth_address::EthAddress" | "EthAddress" ? string :
-  // String types
-  T extends "core::byte_array::ByteArray" | "ByteArray" ? string :
-  T extends "core::bytes_31::bytes31" | "bytes31" ? string :
-  // Option/Result - simplified to the inner type or undefined
-  T extends `core::option::Option::<${infer _Inner}>` ? unknown :
-  T extends `core::result::Result::<${infer _Ok}, ${infer _Err}>` ? unknown :
-  // Not a primitive - return never to signal struct/enum lookup needed
-  never;
+  T extends "core::integer::u8" | "u8"
+    ? number
+    : T extends "core::integer::u16" | "u16"
+      ? number
+      : T extends "core::integer::u32" | "u32"
+        ? number
+        : T extends "core::integer::u64" | "u64"
+          ? bigint
+          : T extends "core::integer::u128" | "u128"
+            ? bigint
+            : T extends "core::integer::u256" | "u256"
+              ? bigint
+              : // Signed integers
+                T extends "core::integer::i8" | "i8"
+                ? number
+                : T extends "core::integer::i16" | "i16"
+                  ? number
+                  : T extends "core::integer::i32" | "i32"
+                    ? number
+                    : T extends "core::integer::i64" | "i64"
+                      ? bigint
+                      : T extends "core::integer::i128" | "i128"
+                        ? bigint
+                        : // Core types
+                          T extends "core::felt252" | "felt252"
+                          ? bigint
+                          : T extends "core::bool" | "bool"
+                            ? boolean
+                            : // Address types
+                              T extends
+                                  | "core::starknet::contract_address::ContractAddress"
+                                  | "ContractAddress"
+                              ? string
+                              : T extends
+                                    | "core::starknet::class_hash::ClassHash"
+                                    | "ClassHash"
+                                ? string
+                                : T extends
+                                      | "core::starknet::eth_address::EthAddress"
+                                      | "EthAddress"
+                                  ? string
+                                  : // String types
+                                    T extends
+                                        | "core::byte_array::ByteArray"
+                                        | "ByteArray"
+                                    ? string
+                                    : T extends
+                                          | "core::bytes_31::bytes31"
+                                          | "bytes31"
+                                      ? string
+                                      : // Option/Result - simplified to the inner type or undefined
+                                        T extends `core::option::Option::<${infer _Inner}>`
+                                        ? unknown
+                                        : T extends `core::result::Result::<${infer _Ok}, ${infer _Err}>`
+                                          ? unknown
+                                          : // Not a primitive - return never to signal struct/enum lookup needed
+                                            never;
 
 /**
  * Map Starknet types to TypeScript types with ABI struct/enum lookup
  */
-type MapStarknetType<TAbi extends StarknetAbi, T extends string> =
-  // First check primitives
-  PrimitiveTypeLookup<T> extends never
-    ? // Handle Array types
-      T extends `core::array::Array::<${infer Inner}>`
+type MapStarknetType<
+  TAbi extends StarknetAbi,
+  T extends string,
+> = // First check primitives
+PrimitiveTypeLookup<T> extends never
+  ? // Handle Array types
+    T extends `core::array::Array::<${infer Inner}>`
+    ? MapStarknetType<TAbi, Inner>[]
+    : T extends `core::array::Span::<${infer Inner}>`
       ? MapStarknetType<TAbi, Inner>[]
-      : T extends `core::array::Span::<${infer Inner}>`
-        ? MapStarknetType<TAbi, Inner>[]
-        : // Try to find struct in ABI
-          Extract<ExtractStructs<TAbi>, { name: T }> extends {
-            members: infer TMembers extends readonly { name: string; type: string }[];
+      : // Try to find struct in ABI
+        Extract<ExtractStructs<TAbi>, { name: T }> extends {
+            members: infer TMembers extends readonly {
+              name: string;
+              type: string;
+            }[];
           }
-          ? { [M in TMembers[number] as M["name"]]: MapStarknetType<TAbi, M["type"]> }
-          : // Try to find enum in ABI (return variant names as string union)
-            Extract<ExtractEnums<TAbi>, { name: T }> extends {
+        ? {
+            [M in TMembers[number] as M["name"]]: MapStarknetType<
+              TAbi,
+              M["type"]
+            >;
+          }
+        : // Try to find enum in ABI (return variant names as string union)
+          Extract<ExtractEnums<TAbi>, { name: T }> extends {
               variants: infer TVariants extends readonly { name: string }[];
             }
-            ? TVariants[number]["name"]
-            : // Unknown type - fallback to unknown
-              unknown
-    : // Primitive type found
-      PrimitiveTypeLookup<T>;
+          ? TVariants[number]["name"]
+          : // Unknown type - fallback to unknown
+            unknown
+  : // Primitive type found
+    PrimitiveTypeLookup<T>;
 
 // ============================================================================
-// Function Input/Output Type Extraction
+// Functions
 // ============================================================================
 
-/**
- * Extract input types as a tuple for function arguments
- */
-type ExtractInputTypes<
-  TAbi extends StarknetAbi,
-  TFunc,
-> = TFunc extends { inputs: infer TInputs extends readonly { name: string; type: string }[] }
-  ? { [K in keyof TInputs]: TInputs[K] extends { type: infer T extends string } ? MapStarknetType<TAbi, T> : never }
+/** Extract input types as a tuple for function arguments */
+type ExtractInputTypes<TAbi extends StarknetAbi, TFunc> = TFunc extends {
+  inputs: infer TInputs extends readonly { name: string; type: string }[];
+}
+  ? {
+      [K in keyof TInputs]: TInputs[K] extends { type: infer T extends string }
+        ? MapStarknetType<TAbi, T>
+        : never;
+    }
   : readonly [];
 
-/**
- * Extract return type from function outputs
- */
-type ExtractReturnType<
-  TAbi extends StarknetAbi,
-  TFunc,
-> = TFunc extends { outputs: readonly [{ type: infer T extends string }] }
+/** Extract return type from function outputs */
+type ExtractReturnType<TAbi extends StarknetAbi, TFunc> = TFunc extends {
+  outputs: readonly [{ type: infer T extends string }];
+}
   ? MapStarknetType<TAbi, T>
   : TFunc extends { outputs: readonly [] }
     ? void
     : unknown;
 
-// ============================================================================
-// Function Name Extraction
-// ============================================================================
-
-/**
- * Extract view function names from interface items (Cairo 1)
- */
+/** Extract view function names from interface items (Cairo 1) */
 type ExtractViewFunctionNames<TAbi extends StarknetAbi> = Extract<
   ExtractInterfaceItems<TAbi>,
   { type: "function"; state_mutability: "view" }
 >["name"];
 
-/**
- * Extract external function names from interface items (Cairo 1)
- */
+/** Extract external function names from interface items (Cairo 1) */
 type ExtractExternalFunctionNames<TAbi extends StarknetAbi> = Extract<
   ExtractInterfaceItems<TAbi>,
   { type: "function"; state_mutability: "external" }
 >["name"];
 
-/**
- * Extract top-level view function names (Cairo 0)
- */
+/** Extract top-level view function names (Cairo 0) */
 type ExtractTopLevelViewFunctionNames<TAbi extends StarknetAbi> = Extract<
   ExtractTopLevelFunctions<TAbi>,
   { state_mutability: "view" }
 >["name"];
 
-/**
- * Extract top-level external function names (Cairo 0)
- */
+/** Extract top-level external function names (Cairo 0) */
 type ExtractTopLevelExternalFunctionNames<TAbi extends StarknetAbi> = Extract<
   ExtractTopLevelFunctions<TAbi>,
   { state_mutability: "external" }
 >["name"];
 
-/**
- * All callable function names (view + external from both Cairo 0 and Cairo 1)
- */
+/** All callable function names (view + external from both Cairo 0 and Cairo 1) */
 type ExtractAllFunctionNames<TAbi extends StarknetAbi> =
   | ExtractViewFunctionNames<TAbi>
   | ExtractExternalFunctionNames<TAbi>
@@ -253,14 +266,46 @@ export type ProfilePattern = Pick<
 };
 
 // ============================================================================
+// Profiling
+// ============================================================================
+
+const SAMPLING_RATE = 10;
+const DB_PREDICTION_THRESHOLD = 0.2;
+const RPC_PREDICTION_THRESHOLD = 0.8;
+const MAX_CONSTANT_PATTERN_COUNT = 10;
+
+/** Serialized {@link ProfilePattern} for unique identification. */
+type ProfileKey = string;
+
+/** Event name. */
+type EventName = string;
+
+/**
+ * Metadata about RPC request patterns for each event.
+ *
+ * @dev Only profile "starknet_call" requests.
+ */
+type Profile = Map<
+  EventName,
+  Map<
+    ProfileKey,
+    { pattern: ProfilePattern; hasConstant: boolean; count: number }
+  >
+>;
+
+/**
+ * LRU cache of {@link ProfilePattern} in {@link Profile} with constant args.
+ *
+ * @dev Used to determine which {@link ProfilePattern} should be evicted.
+ */
+type ProfileConstantLRU = Map<EventName, Set<ProfileKey>>;
+
+// ============================================================================
 // Typed Contract
 // ============================================================================
 
-/**
- * Typed Contract that provides autocomplete for ABI functions with proper return types
- */
+/** Typed Contract that provides autocomplete for ABI functions with proper return types */
 export type TypedContract<TAbi extends StarknetAbi> = {
-  /** Access to the underlying starknet.js Contract instance */
   _contract: Contract;
 } & {
   [K in ExtractAllFunctionNames<TAbi>]: (
@@ -285,66 +330,48 @@ export type StarknetJsClientActions = {
    */
   provider: RpcProvider;
 
-  /**
-   * Get block by number or hash
-   */
+  /** Get block by number or hash */
   getBlock: (params?: {
     blockNumber?: bigint | number;
     blockHash?: string;
   }) => Promise<GetBlockResponse>;
 
-  /**
-   * Get transaction by hash
-   */
+  /** Get transaction by hash */
   getTransaction: (params: {
     hash: string;
   }) => Promise<GetTransactionResponse>;
 
-  /**
-   * Get transaction receipt
-   */
+  /** Get transaction receipt */
   getTransactionReceipt: (params: {
     hash: string;
   }) => Promise<GetTransactionReceiptResponse>;
 
-  /**
-   * Get storage at address
-   */
+  /** Get storage at address */
   getStorageAt: (params: {
     address: string;
     key: string;
     blockNumber?: bigint | number;
   }) => Promise<string>;
 
-  /**
-   * Get current block number
-   */
+  /** Get current block number */
   getBlockNumber: () => Promise<number>;
 
-  /**
-   * Get chain ID
-   */
+  /** Get chain ID */
   getChainId: () => Promise<string>;
 
-  /**
-   * Get class hash at address
-   */
+  /** Get class hash at address */
   getClassHashAt: (params: {
     address: string;
     blockNumber?: bigint | number;
   }) => Promise<string>;
 
-  /**
-   * Get nonce for address
-   */
+  /** Get nonce for address */
   getNonce: (params: {
     address: string;
     blockNumber?: bigint | number;
   }) => Promise<string>;
 
-  /**
-   * Raw RPC request
-   */
+  /** Raw RPC request */
   request: <TResult = unknown>(params: {
     method: string;
     params?: unknown;
@@ -390,28 +417,131 @@ export const getCacheKey = (request: RequestParameters) => {
   return toLowerCase(JSON.stringify(orderObject(request)));
 };
 
+/**
+ * Encode a profile request into a starknet_call RPC request.
+ * Similar to core's encodeRequest but for Starknet.
+ */
+export const encodeRequest = (request: Request) => {
+  // Get function selector from name
+  const entryPointSelector = selector.getSelectorFromName(request.functionName);
+
+  // Encode calldata - starknet.js CallData handles ABI encoding
+  let calldata: string[] = [];
+  if (request.args && request.args.length > 0) {
+    // Find the function in the ABI to get input types
+    const abi = request.abi as StarknetAbi;
+    let functionAbi: any = undefined;
+
+    for (const item of abi) {
+      if (item.type === "function" && item.name === request.functionName) {
+        functionAbi = item;
+        break;
+      }
+      if (item.type === "interface" && "items" in item) {
+        for (const subItem of (item as any).items) {
+          if (
+            subItem.type === "function" &&
+            subItem.name === request.functionName
+          ) {
+            functionAbi = subItem;
+            break;
+          }
+        }
+        if (functionAbi) break;
+      }
+    }
+
+    if (functionAbi) {
+      const cd = new CallData(abi);
+      calldata = cd.compile(request.functionName, request.args as any);
+    }
+  }
+
+  // Build block_id parameter
+  const blockId =
+    request.blockNumber === "latest"
+      ? "latest"
+      : { block_number: Number(request.blockNumber) };
+
+  return {
+    method: "starknet_call",
+    params: [
+      {
+        contract_address: request.address,
+        entry_point_selector: entryPointSelector,
+        calldata,
+      },
+      blockId,
+    ],
+  } satisfies RequestParameters;
+};
+
+export const decodeResponse = (response: string) => {
+  try {
+    return JSON.parse(response);
+  } catch (error) {
+    return response;
+  }
+};
+
 type Cache = Map<number, Map<string, Promise<string | Error> | string>>;
 
-/**
- * Create a cached starknet.js client for indexing
- */
 export const createCachedStarknetJsClient = ({
   common,
   indexingBuild,
   syncStore,
-  eventCount: _eventCount,
+  eventCount,
 }: {
   common: Common;
   indexingBuild: Pick<IndexingBuild, "chains" | "rpcs">;
   syncStore: SyncStore;
-  eventCount?: { [eventName: string]: number };
+  eventCount: { [eventName: string]: number };
 }): CachedStarknetJsClient => {
   let event: Event | SetupEvent = undefined!;
   const cache: Cache = new Map();
+  const profile: Profile = new Map();
+  const profileConstantLRU: ProfileConstantLRU = new Map();
 
   for (const chain of indexingBuild.chains) {
     cache.set(chain.id, new Map());
   }
+
+  // Same as core's addProfilePattern
+  const addProfilePattern = ({
+    pattern,
+    hasConstant,
+  }: { pattern: ProfilePattern; hasConstant: boolean }) => {
+    const profilePatternKey = getProfilePatternKey(pattern);
+
+    if (profile.get(event.name)!.has(profilePatternKey)) {
+      profile.get(event.name)!.get(profilePatternKey)!.count++;
+
+      if (hasConstant) {
+        profileConstantLRU.get(event.name)!.delete(profilePatternKey);
+        profileConstantLRU.get(event.name)!.add(profilePatternKey);
+      }
+    } else {
+      profile
+        .get(event.name)!
+        .set(profilePatternKey, { pattern, hasConstant, count: 1 });
+
+      if (hasConstant) {
+        profileConstantLRU.get(event.name)!.add(profilePatternKey);
+        if (
+          profileConstantLRU.get(event.name)!.size > MAX_CONSTANT_PATTERN_COUNT
+        ) {
+          const firstKey = profileConstantLRU
+            .get(event.name)!
+            .keys()
+            .next().value;
+          if (firstKey) {
+            profile.get(event.name)!.delete(firstKey);
+            profileConstantLRU.get(event.name)!.delete(firstKey);
+          }
+        }
+      }
+    }
+  };
 
   return {
     getClient(chain) {
@@ -543,7 +673,8 @@ export const createCachedStarknetJsClient = ({
                 id: body.id,
                 error: {
                   code: -32603,
-                  message: error instanceof Error ? error.message : "Unknown error",
+                  message:
+                    error instanceof Error ? error.message : "Unknown error",
                 },
               }),
               {
@@ -574,9 +705,16 @@ export const createCachedStarknetJsClient = ({
       };
 
       const actions: StarknetJsClientActions = {
-        contract<TAbi extends StarknetAbi>(abi: TAbi, address: string): TypedContract<TAbi> {
+        contract<TAbi extends StarknetAbi>(
+          abi: TAbi,
+          address: string,
+        ): TypedContract<TAbi> {
           // starknet.js v9 uses options object for Contract constructor
-          const contract = new Contract({ abi, address, providerOrAccount: provider });
+          const contract = new Contract({
+            abi,
+            address,
+            providerOrAccount: provider,
+          });
 
           // Helper to get all function names from ABI (handles nested interface structure)
           const getFunctionNames = (): string[] => {
@@ -585,16 +723,22 @@ export const createCachedStarknetJsClient = ({
               // Check top-level functions
               if (
                 item.type === "function" &&
-                (item.state_mutability === "view" || item.state_mutability === "external")
+                (item.state_mutability === "view" ||
+                  item.state_mutability === "external")
               ) {
                 names.push(item.name);
               }
               // Check functions inside interface items (Starknet ABI structure)
-              if (item.type === "interface" && "items" in item && Array.isArray(item.items)) {
+              if (
+                item.type === "interface" &&
+                "items" in item &&
+                Array.isArray(item.items)
+              ) {
                 for (const subItem of item.items as any[]) {
                   if (
                     subItem.type === "function" &&
-                    (subItem.state_mutability === "view" || subItem.state_mutability === "external")
+                    (subItem.state_mutability === "view" ||
+                      subItem.state_mutability === "external")
                   ) {
                     names.push(subItem.name);
                   }
@@ -614,9 +758,88 @@ export const createCachedStarknetJsClient = ({
           // Add wrapped methods for each ABI function
           for (const fnName of getFunctionNames()) {
             wrapper[fnName] = async (...args: unknown[]) => {
+              const endClock = startClock();
+
+              // Profile pattern recording (same logic as core's getPonderAction)
+              if (
+                event.type !== "setup" &&
+                eventCount[event.name]! % SAMPLING_RATE === 1
+              ) {
+                if (profile.has(event.name) === false) {
+                  profile.set(event.name, new Map());
+                  profileConstantLRU.set(event.name, new Set());
+                }
+
+                const recordPatternResult = recordProfilePattern({
+                  event: event as Event,
+                  args: {
+                    address,
+                    abi: abi as any,
+                    functionName: fnName,
+                    args: args.length > 0 ? args : undefined,
+                  },
+                  hints: Array.from(profile.get(event.name)!.values()),
+                });
+                if (recordPatternResult) {
+                  addProfilePattern(recordPatternResult);
+                }
+              }
+
               const blockId = getBlockId();
-              // starknet.js v9 Contract.call signature: call(method, args?, options?)
-              return contract.call(fnName, args as any[], { blockIdentifier: blockId });
+
+              // Retry logic (same as core's getRetryAction)
+              const RETRY_COUNT = 9;
+              const BASE_DURATION = 125;
+
+              for (let i = 0; i <= RETRY_COUNT; i++) {
+                try {
+                  // starknet.js v9 Contract.call signature: call(method, args?, options?)
+                  const result = await contract.call(fnName, args as any[], {
+                    blockIdentifier: blockId,
+                  });
+
+                  // Record metrics
+                  common.metrics.ponder_indexing_rpc_action_duration.observe(
+                    { action: "contract.call" },
+                    endClock(),
+                  );
+
+                  return result;
+                } catch (error) {
+                  // Check if error is retryable (similar to core's logic)
+                  const isRetryable =
+                    (error as Error)?.message?.includes("not found") ||
+                    (error as Error)?.message?.includes("returned no data");
+
+                  if (!isRetryable || i === RETRY_COUNT) {
+                    common.logger.warn({
+                      msg: "Failed 'context.client' action",
+                      action: `contract.${fnName}`,
+                      event: event.name,
+                      chain: chain.name,
+                      chain_id: chain.id,
+                      retry_count: i,
+                      error: error as Error,
+                    });
+                    throw error;
+                  }
+
+                  const duration = BASE_DURATION * 2 ** i;
+                  common.logger.warn({
+                    msg: "Failed 'context.client' action",
+                    action: `contract.${fnName}`,
+                    event: event.name,
+                    chain: chain.name,
+                    chain_id: chain.id,
+                    retry_count: i,
+                    retry_delay: duration,
+                    error: error as Error,
+                  });
+                  await wait(duration);
+                }
+              }
+              // Should never reach here, but TypeScript needs a return
+              throw new Error("Exhausted retries without result");
             };
           }
 
@@ -674,15 +897,114 @@ export const createCachedStarknetJsClient = ({
       return actions;
     },
 
-    // TODO: Implement profiling/prefetch optimization for RPC-heavy indexers
-    // This would integrate with indexing/profile.ts to:
-    // 1. Record patterns when contract.call() is invoked (via wrapper)
-    // 2. Predict future RPC calls based on detected patterns
-    // 3. Batch multiple calls for upcoming events in fewer round-trips
-    // See core/src/indexing/client.ts for reference implementation
-    // Potential 10-20x speedup for indexers making many RPC calls per event
-    async prefetch(_params: { events: Event[] }) {
-      // No-op for now - implement when performance becomes an issue
+    // Same implementation as core's prefetch
+    async prefetch({ events }) {
+      const context = {
+        logger: common.logger.child({ action: "prefetch_rpc_requests" }),
+      };
+      const prefetchEndClock = startClock();
+
+      // Use profiling metadata + next event batch to determine which
+      // rpc requests are going to be made, and preload them into the cache.
+
+      const prediction: { ev: number; request: Request }[] = [];
+
+      for (const ev of events) {
+        if (profile.has(ev.name)) {
+          for (const [, { pattern, count }] of profile.get(ev.name)!) {
+            // Expected value of times the prediction will be used.
+            const expectedValue =
+              (count * SAMPLING_RATE) / eventCount[ev.name]!;
+            prediction.push({
+              ev: expectedValue,
+              request: recoverProfilePattern(pattern, ev),
+            });
+          }
+        }
+      }
+
+      const chainRequests: Map<
+        number,
+        { ev: number; request: RequestParameters }[]
+      > = new Map();
+      for (const chain of indexingBuild.chains) {
+        chainRequests.set(chain.id, []);
+      }
+
+      for (const { ev, request } of dedupe(prediction, ({ request }) =>
+        getCacheKey(encodeRequest(request)),
+      )) {
+        chainRequests.get(request.chainId)!.push({
+          ev,
+          request: encodeRequest(request),
+        });
+      }
+
+      await Promise.all(
+        Array.from(chainRequests.entries()).map(async ([chainId, requests]) => {
+          const i = indexingBuild.chains.findIndex((n) => n.id === chainId);
+          const chain = indexingBuild.chains[i]!;
+          const rpc = indexingBuild.rpcs[i]!;
+
+          const dbRequests = requests.filter(
+            ({ ev }) => ev > DB_PREDICTION_THRESHOLD,
+          );
+
+          common.metrics.ponder_indexing_rpc_prefetch_total.inc(
+            {
+              chain: chain.name,
+              method: "starknet_call",
+              type: "database",
+            },
+            dbRequests.length,
+          );
+
+          const cachedResults = await syncStore.getRpcRequestResults(
+            {
+              requests: dbRequests.map(({ request }) => request),
+              chainId,
+            },
+            context,
+          );
+
+          for (let j = 0; j < dbRequests.length; j++) {
+            const request = dbRequests[j]!;
+            const cachedResult = cachedResults[j]!;
+
+            if (cachedResult !== undefined) {
+              cache
+                .get(chainId)!
+                .set(getCacheKey(request.request), cachedResult);
+            } else if (request.ev > RPC_PREDICTION_THRESHOLD) {
+              const resultPromise = rpc
+                .request(request.request, context)
+                .then((result) => JSON.stringify(result))
+                .catch((error) => error as Error);
+
+              common.metrics.ponder_indexing_rpc_prefetch_total.inc({
+                chain: chain.name,
+                method: "starknet_call",
+                type: "rpc",
+              });
+
+              // Note: Unawaited request added to cache
+              cache
+                .get(chainId)!
+                .set(getCacheKey(request.request), resultPromise);
+            }
+          }
+
+          if (dbRequests.length > 0) {
+            common.logger.debug({
+              msg: "Prefetched JSON-RPC requests",
+              chain: chain.name,
+              chain_id: chain.id,
+              request_count: dbRequests.length,
+              duration: prefetchEndClock(),
+            });
+          }
+        }),
+      );
     },
 
     clear() {

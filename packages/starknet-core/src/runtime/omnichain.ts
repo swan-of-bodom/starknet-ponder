@@ -105,6 +105,7 @@ export async function runOmnichain({
     common,
     indexingBuild,
     syncStore,
+    eventCount,
   });
 
   const indexingErrorHandler: IndexingErrorHandler = {

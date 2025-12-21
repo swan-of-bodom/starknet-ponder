@@ -102,6 +102,7 @@ export async function runMultichain({
     common,
     indexingBuild,
     syncStore,
+    eventCount,
   });
 
   const indexingErrorHandler: IndexingErrorHandler = {
