@@ -73,32 +73,36 @@ type ExtractEnums<TAbi extends StarknetAbi> = Extract<
 
 /** Map primitive Starknet/Cairo types to TypeScript types */
 type PrimitiveTypeLookup<T extends string> =
-  // Unsigned integers
-  T extends "core::integer::u8" | "u8"
-    ? number
-    : T extends "core::integer::u16" | "u16"
-      ? number
-      : T extends "core::integer::u32" | "u32"
-        ? number
-        : T extends "core::integer::u64" | "u64"
-          ? bigint
-          : T extends "core::integer::u128" | "u128"
-            ? bigint
-            : T extends "core::integer::u256" | "u256"
-              ? bigint
-              : // Signed integers
-                T extends "core::integer::i8" | "i8"
-                ? number
-                : T extends "core::integer::i16" | "i16"
-                  ? number
-                  : T extends "core::integer::i32" | "i32"
-                    ? number
-                    : T extends "core::integer::i64" | "i64"
-                      ? bigint
-                      : T extends "core::integer::i128" | "i128"
-                        ? bigint
-                        : // Core types
-                          T extends "core::felt252" | "felt252"
+  // Unsigned integers - starknet.js returns bigint for ALL integer types
+  T extends
+    | "core::integer::u8"
+    | "u8"
+    | "core::integer::u16"
+    | "u16"
+    | "core::integer::u32"
+    | "u32"
+    | "core::integer::u64"
+    | "u64"
+    | "core::integer::u128"
+    | "u128"
+    | "core::integer::u256"
+    | "u256"
+    ? bigint
+    : // Signed integers - starknet.js returns bigint for ALL integer types
+      T extends
+        | "core::integer::i8"
+        | "i8"
+        | "core::integer::i16"
+        | "i16"
+        | "core::integer::i32"
+        | "i32"
+        | "core::integer::i64"
+        | "i64"
+        | "core::integer::i128"
+        | "i128"
+      ? bigint
+      : // Core types
+        T extends "core::felt252" | "felt252"
                           ? bigint
                           : T extends "core::bool" | "bool"
                             ? boolean
@@ -184,12 +188,72 @@ type ExtractInputTypes<TAbi extends StarknetAbi, TFunc> = TFunc extends {
 
 /** Extract return type from function outputs */
 type ExtractReturnType<TAbi extends StarknetAbi, TFunc> = TFunc extends {
-  outputs: readonly [{ type: infer T extends string }];
+  outputs: readonly [{ type: infer T extends string }] | [{ type: infer T extends string }];
 }
   ? MapStarknetType<TAbi, T>
-  : TFunc extends { outputs: readonly [] }
+  : TFunc extends { outputs: readonly [] | [] }
     ? void
     : unknown;
+
+/** Compute return type for readContract by function name */
+type ReadContractReturnType<
+  TAbi extends StarknetAbi,
+  TFunctionName extends string,
+> = [TFunctionName] extends [ExtractAllFunctionNames<TAbi>]
+  ? ExtractReturnType<TAbi, GetFunction<TAbi, TFunctionName>>
+  : unknown;
+
+// ============================================================================
+// ReadContracts Types (multicall-like batch reads)
+// ============================================================================
+
+/** Single contract call configuration for readContracts */
+export type ContractFunctionConfig<
+  TAbi extends StarknetAbi = StarknetAbi,
+  TFunctionName extends string = string,
+> = {
+  abi: TAbi;
+  address: string;
+  functionName: TFunctionName;
+  args?: readonly unknown[];
+};
+
+/** Success result when allowFailure is true */
+type ReadContractSuccessResult<TResult> = {
+  status: "success";
+  result: TResult;
+};
+
+/** Failure result when allowFailure is true */
+type ReadContractFailureResult = {
+  status: "failure";
+  error: Error;
+};
+
+/** Result type for a single contract call based on allowFailure */
+type ReadContractResult<TResult, TAllowFailure extends boolean> =
+  TAllowFailure extends true
+    ? ReadContractSuccessResult<TResult> | ReadContractFailureResult
+    : TResult;
+
+/** Extract return type from a ContractFunctionConfig */
+type ContractResultType<TContract> = TContract extends ContractFunctionConfig<
+  infer TAbi,
+  infer TFunctionName
+>
+  ? ReadContractReturnType<TAbi, TFunctionName>
+  : unknown;
+
+/** Map over contracts array to get tuple of return types */
+type ReadContractsReturnType<
+  TContracts extends readonly ContractFunctionConfig[],
+  TAllowFailure extends boolean,
+> = {
+  [K in keyof TContracts]: ReadContractResult<
+    ContractResultType<TContracts[K]>,
+    TAllowFailure
+  >;
+};
 
 /** Extract view function names from interface items (Cairo 1) */
 type ExtractViewFunctionNames<TAbi extends StarknetAbi> = Extract<
@@ -314,7 +378,53 @@ export type TypedContract<TAbi extends StarknetAbi> = {
 
 export type StarknetJsClientActions = {
   /**
-   * Create a Contract instance for calling view functions
+   * Read a contract function (viem-style API)
+   * @example
+   * const balance = await client.readContract({
+   *   abi: erc20ABI,
+   *   address: tokenAddress,
+   *   functionName: "balanceOf",
+   *   args: [userAddress],
+   * });
+   */
+  readContract: <
+    const TAbi extends StarknetAbi,
+    const TFunctionName extends ExtractAllFunctionNames<TAbi>,
+  >(params: {
+    abi: TAbi;
+    address: string;
+    functionName: TFunctionName;
+    args?: readonly unknown[];
+  }) => Promise<ReadContractReturnType<TAbi, TFunctionName>>;
+
+  /**
+   * Batch multiple contract reads (similar to viem's multicall)
+   * @example
+   * const [balance, totalSupply, decimals] = await client.readContracts({
+   *   contracts: [
+   *     { abi: erc20ABI, address: token, functionName: "balanceOf", args: [user] },
+   *     { abi: erc20ABI, address: token, functionName: "totalSupply" },
+   *     { abi: erc20ABI, address: token, functionName: "decimals" },
+   *   ],
+   * });
+   *
+   * // With allowFailure: true (default), results are wrapped in status objects
+   * const results = await client.readContracts({
+   *   contracts: [...],
+   *   allowFailure: true,
+   * });
+   * if (results[0].status === "success") console.log(results[0].result);
+   */
+  readContracts: <
+    const TContracts extends readonly ContractFunctionConfig[],
+    TAllowFailure extends boolean = true,
+  >(params: {
+    contracts: TContracts;
+    allowFailure?: TAllowFailure;
+  }) => Promise<ReadContractsReturnType<TContracts, TAllowFailure>>;
+
+  /**
+   * Create a typed Contract instance for calling view functions.
    * @example
    * const erc20 = client.contract(erc20ABI, tokenAddress);
    * const balance = await erc20.balanceOf(userAddress);
@@ -324,9 +434,7 @@ export type StarknetJsClientActions = {
     address: string,
   ) => TypedContract<TAbi>;
 
-  /**
-   * Get the underlying RpcProvider for low-level operations
-   */
+  /** Get the underlying RpcProvider for low-level operations */
   provider: RpcProvider;
 
   /** Get block by number or hash */
@@ -613,13 +721,24 @@ export const createCachedStarknetJsClient = ({
 
           // Cache the response
           if (!UNCACHED_RESPONSES.includes(response)) {
+            // Extract block number from request for cache keying
+            const blockIdParam = getBlockIdParam(body);
+            const encodedBlockNumber =
+              blockIdParam === undefined
+                ? undefined
+                : blockIdParam === "latest"
+                  ? 0
+                  : typeof blockIdParam === "number"
+                    ? blockIdParam
+                    : undefined;
+
             syncStore
               .insertRpcRequestResults(
                 {
                   requests: [
                     {
                       request: body,
-                      blockNumber: undefined,
+                      blockNumber: encodedBlockNumber,
                       result: JSON.stringify(response),
                     },
                   ],
@@ -701,6 +820,227 @@ export const createCachedStarknetJsClient = ({
       };
 
       const actions: StarknetJsClientActions = {
+        readContract(params) {
+          const { abi, address, functionName, args = [] } = params;
+          const endClock = startClock();
+
+          // Create contract instance
+          const contract = new Contract({
+            abi,
+            address,
+            providerOrAccount: provider,
+          });
+
+          // Profile pattern recording (same logic as core's getPonderAction)
+          if (
+            event.type !== "setup" &&
+            eventCount[event.name]! % SAMPLING_RATE === 1
+          ) {
+            if (profile.has(event.name) === false) {
+              profile.set(event.name, new Map());
+              profileConstantLRU.set(event.name, new Set());
+            }
+
+            const recordPatternResult = recordProfilePattern({
+              event: event as Event,
+              args: {
+                address,
+                abi: abi as any,
+                functionName,
+                args: args.length > 0 ? [...args] : undefined,
+              },
+              hints: Array.from(profile.get(event.name)!.values()),
+            });
+            if (recordPatternResult) {
+              addProfilePattern(recordPatternResult);
+            }
+          }
+
+          const blockId = getBlockId();
+
+          // Retry logic (same as core's getRetryAction)
+          const RETRY_COUNT = 9;
+          const BASE_DURATION = 125;
+
+          const execute = async (): Promise<any> => {
+            for (let i = 0; i <= RETRY_COUNT; i++) {
+              try {
+                const result = await contract.call(
+                  functionName,
+                  [...args] as any[],
+                  {
+                    blockIdentifier: blockId,
+                  },
+                );
+
+                // Record metrics
+                common.metrics.ponder_indexing_rpc_action_duration.observe(
+                  { action: "readContract" },
+                  endClock(),
+                );
+
+                return result;
+              } catch (error) {
+                const isRetryable =
+                  (error as Error)?.message?.includes("not found") ||
+                  (error as Error)?.message?.includes("returned no data");
+
+                if (!isRetryable || i === RETRY_COUNT) {
+                  common.logger.warn({
+                    msg: "Failed 'context.client' action",
+                    action: `readContract.${functionName}`,
+                    event: event.name,
+                    chain: chain.name,
+                    chain_id: chain.id,
+                    retry_count: i,
+                    error: error as Error,
+                  });
+                  throw error;
+                }
+
+                const duration = BASE_DURATION * 2 ** i;
+                common.logger.warn({
+                  msg: "Failed 'context.client' action",
+                  action: `readContract.${functionName}`,
+                  event: event.name,
+                  chain: chain.name,
+                  chain_id: chain.id,
+                  retry_count: i,
+                  retry_delay: duration,
+                  error: error as Error,
+                });
+                await wait(duration);
+              }
+            }
+            throw new Error("Exhausted retries without result");
+          };
+
+          return execute();
+        },
+
+        async readContracts(params) {
+          const { contracts, allowFailure = true } = params;
+          const endClock = startClock();
+
+          // Profile pattern recording for batch (like core's multicall profiling)
+          if (
+            event.type !== "setup" &&
+            eventCount[event.name]! % SAMPLING_RATE === 1 &&
+            contracts.length < 10
+          ) {
+            if (profile.has(event.name) === false) {
+              profile.set(event.name, new Map());
+              profileConstantLRU.set(event.name, new Set());
+            }
+
+            for (const contractConfig of contracts) {
+              const recordPatternResult = recordProfilePattern({
+                event: event as Event,
+                args: {
+                  address: contractConfig.address,
+                  abi: contractConfig.abi as any,
+                  functionName: contractConfig.functionName,
+                  args:
+                    contractConfig.args && contractConfig.args.length > 0
+                      ? [...contractConfig.args]
+                      : undefined,
+                },
+                hints: Array.from(profile.get(event.name)!.values()),
+              });
+              if (recordPatternResult) {
+                addProfilePattern(recordPatternResult);
+              }
+            }
+          }
+
+          const results = await Promise.all(
+            contracts.map(async (contractConfig) => {
+              const { abi, address, functionName, args = [] } = contractConfig;
+
+              // Create contract instance
+              const contract = new Contract({
+                abi,
+                address,
+                providerOrAccount: provider,
+              });
+
+              const blockId = getBlockId();
+
+              // Retry logic
+              const RETRY_COUNT = 9;
+              const BASE_DURATION = 125;
+
+              for (let i = 0; i <= RETRY_COUNT; i++) {
+                try {
+                  const result = await contract.call(
+                    functionName,
+                    [...args] as any[],
+                    { blockIdentifier: blockId },
+                  );
+
+                  if (allowFailure) {
+                    return { status: "success" as const, result };
+                  }
+                  return result;
+                } catch (error) {
+                  const isRetryable =
+                    (error as Error)?.message?.includes("not found") ||
+                    (error as Error)?.message?.includes("returned no data");
+
+                  if (!isRetryable || i === RETRY_COUNT) {
+                    if (allowFailure) {
+                      return {
+                        status: "failure" as const,
+                        error: error as Error,
+                      };
+                    }
+                    common.logger.warn({
+                      msg: "Failed 'context.client' action",
+                      action: `readContracts.${functionName}`,
+                      event: event.name,
+                      chain: chain.name,
+                      chain_id: chain.id,
+                      retry_count: i,
+                      error: error as Error,
+                    });
+                    throw error;
+                  }
+
+                  const duration = BASE_DURATION * 2 ** i;
+                  common.logger.warn({
+                    msg: "Failed 'context.client' action",
+                    action: `readContracts.${functionName}`,
+                    event: event.name,
+                    chain: chain.name,
+                    chain_id: chain.id,
+                    retry_count: i,
+                    retry_delay: duration,
+                    error: error as Error,
+                  });
+                  await wait(duration);
+                }
+              }
+
+              // Should never reach here
+              if (allowFailure) {
+                return {
+                  status: "failure" as const,
+                  error: new Error("Exhausted retries without result"),
+                };
+              }
+              throw new Error("Exhausted retries without result");
+            }),
+          );
+
+          // Record metrics
+          common.metrics.ponder_indexing_rpc_action_duration.observe(
+            { action: "readContracts" },
+            endClock(),
+          );
+
+          return results as any;
+        },
+
         contract<TAbi extends StarknetAbi>(
           abi: TAbi,
           address: string,
