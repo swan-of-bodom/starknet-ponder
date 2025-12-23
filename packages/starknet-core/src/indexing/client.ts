@@ -138,8 +138,7 @@ type PrimitiveTypeLookup<T extends string> =
 type MapStarknetType<
   TAbi extends StarknetAbi,
   T extends string,
-> = // First check primitives
-PrimitiveTypeLookup<T> extends never
+> = PrimitiveTypeLookup<T> extends never // First check primitives
   ? // Handle Array types
     T extends `core::array::Array::<${infer Inner}>`
     ? MapStarknetType<TAbi, Inner>[]
@@ -408,9 +407,7 @@ const nonBlockDependentMethods = new Set([
   "starknet_getStateUpdate",
 ]);
 
-/**
- * RPC responses that are not cached.
- */
+/** RPC responses that are not cached. */
 const UNCACHED_RESPONSES = [[], null] as unknown[];
 
 export const getCacheKey = (request: RequestParameters) => {
@@ -425,7 +422,7 @@ export const encodeRequest = (request: Request) => {
   // Get function selector from name
   const entryPointSelector = selector.getSelectorFromName(request.functionName);
 
-  // Encode calldata - starknet.js CallData handles ABI encoding
+  // Encode calldata
   let calldata: string[] = [];
   if (request.args && request.args.length > 0) {
     // Find the function in the ABI to get input types
@@ -457,7 +454,6 @@ export const encodeRequest = (request: Request) => {
     }
   }
 
-  // Build block_id parameter
   const blockId =
     request.blockNumber === "latest"
       ? "latest"
@@ -465,14 +461,14 @@ export const encodeRequest = (request: Request) => {
 
   return {
     method: "starknet_call",
-    params: [
-      {
+    params: {
+      request: {
         contract_address: request.address,
         entry_point_selector: entryPointSelector,
         calldata,
       },
-      blockId,
-    ],
+      block_id: blockId,
+    },
   } satisfies RequestParameters;
 };
 
@@ -1039,9 +1035,9 @@ export const getBlockIdParam = (request: RequestParameters) => {
   };
 
   switch (request.method as string) {
-    // params: [{ contract_address, entry_point_selector, calldata}, block_id]
+    // params: { request: {...}, block_id: {...} } (named params)
     case "starknet_call":
-      blockId = getBlockId(request.params?.[1]);
+      blockId = getBlockId((request.params as any)?.block_id);
       break;
 
     // params: [contract_address, key, block_id]
