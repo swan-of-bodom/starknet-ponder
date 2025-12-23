@@ -74,6 +74,7 @@ type ExtractEnums<TAbi extends StarknetAbi> = Extract<
 /** Map primitive Starknet/Cairo types to TypeScript types */
 type PrimitiveTypeLookup<T extends string> =
   // Unsigned integers - starknet.js returns bigint for ALL integer types
+  // https://starknetjs.com/docs/guides/contracts/define_call_message#receive-data-from-a-cairo-contract
   T extends
     | "core::integer::u8"
     | "u8"
@@ -87,62 +88,47 @@ type PrimitiveTypeLookup<T extends string> =
     | "u128"
     | "core::integer::u256"
     | "u256"
+    | "core::integer::i8"
+    | "i8"
+    | "core::integer::i16"
+    | "i16"
+    | "core::integer::i32"
+    | "i32"
+    | "core::integer::i64"
+    | "i64"
+    | "core::integer::i128"
+    | "i128"
+    | "core::felt252"
+    | "felt252"
     ? bigint
-    : // Signed integers - starknet.js returns bigint for ALL integer types
-      T extends
-        | "core::integer::i8"
-        | "i8"
-        | "core::integer::i16"
-        | "i16"
-        | "core::integer::i32"
-        | "i32"
-        | "core::integer::i64"
-        | "i64"
-        | "core::integer::i128"
-        | "i128"
-      ? bigint
-      : // Core types
-        T extends "core::felt252" | "felt252"
-                          ? bigint
-                          : T extends "core::bool" | "bool"
-                            ? boolean
-                            : // Address types
-                              T extends
-                                  | "core::starknet::contract_address::ContractAddress"
-                                  | "ContractAddress"
-                              ? string
-                              : T extends
-                                    | "core::starknet::class_hash::ClassHash"
-                                    | "ClassHash"
-                                ? string
-                                : T extends
-                                      | "core::starknet::eth_address::EthAddress"
-                                      | "EthAddress"
-                                  ? string
-                                  : // String types
-                                    T extends
-                                        | "core::byte_array::ByteArray"
-                                        | "ByteArray"
-                                    ? string
-                                    : T extends
-                                          | "core::bytes_31::bytes31"
-                                          | "bytes31"
-                                      ? string
-                                      : // Option/Result - simplified to the inner type or undefined
-                                        T extends `core::option::Option::<${infer _Inner}>`
-                                        ? unknown
-                                        : T extends `core::result::Result::<${infer _Ok}, ${infer _Err}>`
-                                          ? unknown
-                                          : // Not a primitive - return never to signal struct/enum lookup needed
-                                            never;
+    : T extends "core::bool" | "bool"
+      ? boolean
+      : // Address types
+        T extends
+            | "core::starknet::contract_address::ContractAddress"
+            | "ContractAddress"
+            | "core::starknet::class_hash::ClassHash"
+            | "ClassHash"
+            | "core::starknet::eth_address::EthAddress"
+            | "EthAddress"
+            | "core::byte_array::ByteArray"
+            | "ByteArray"
+            | "core::bytes_31::bytes31"
+            | "bytes31"
+        ? string
+        : // Option/Result
+          T extends `core::option::Option::<${infer _Inner}>`
+          ? unknown
+          : T extends `core::result::Result::<${infer _Ok}, ${infer _Err}>`
+            ? unknown
+            : // Not a primitive - return never to signal struct/enum lookup needed
+              never;
 
-/**
- * Map Starknet types to TypeScript types with ABI struct/enum lookup
- */
+/** Map Starknet types to TypeScript types with ABI struct/enum lookup */
 type MapStarknetType<
   TAbi extends StarknetAbi,
   T extends string,
-> = PrimitiveTypeLookup<T> extends never // First check primitives
+> = PrimitiveTypeLookup<T> extends never
   ? // Handle Array types
     T extends `core::array::Array::<${infer Inner}>`
     ? MapStarknetType<TAbi, Inner>[]
@@ -188,7 +174,9 @@ type ExtractInputTypes<TAbi extends StarknetAbi, TFunc> = TFunc extends {
 
 /** Extract return type from function outputs */
 type ExtractReturnType<TAbi extends StarknetAbi, TFunc> = TFunc extends {
-  outputs: readonly [{ type: infer T extends string }] | [{ type: infer T extends string }];
+  outputs:
+    | readonly [{ type: infer T extends string }]
+    | [{ type: infer T extends string }];
 }
   ? MapStarknetType<TAbi, T>
   : TFunc extends { outputs: readonly [] | [] }
@@ -231,10 +219,12 @@ type ReadContractFailureResult = {
 };
 
 /** Result type for a single contract call based on allowFailure */
-type ReadContractResult<TResult, TAllowFailure extends boolean> =
-  TAllowFailure extends true
-    ? ReadContractSuccessResult<TResult> | ReadContractFailureResult
-    : TResult;
+type ReadContractResult<
+  TResult,
+  TAllowFailure extends boolean,
+> = TAllowFailure extends true
+  ? ReadContractSuccessResult<TResult> | ReadContractFailureResult
+  : TResult;
 
 /** Extract return type from a ContractFunctionConfig */
 type ContractResultType<TContract> = TContract extends ContractFunctionConfig<
@@ -375,6 +365,9 @@ export type TypedContract<TAbi extends StarknetAbi> = {
     ...args: ExtractInputTypes<TAbi, GetFunction<TAbi, K>>
   ) => Promise<ExtractReturnType<TAbi, GetFunction<TAbi, K>>>;
 };
+
+// NOTE: `readContract` and `readContracts` is syntactic sugar for starknetjs' actions to match /core and viem style API.
+//       It uses starknetjs' contract.{functioName} under the hood.
 
 export type StarknetJsClientActions = {
   /**
