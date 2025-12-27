@@ -1034,7 +1034,7 @@ importers:
         specifier: ^1.0.2
         version: 1.0.2(@edge-runtime/vm@3.2.0)(@types/node@20.11.24)(lightningcss@1.30.0)
 
-  packages/create-ponder-starknet:
+  packages/create-starknet-ponder:
     dependencies:
       cac:
         specifier: ^6.7.14

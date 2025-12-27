@@ -2,7 +2,7 @@ import { defineConfig } from "tsup";
 import { dependencies } from "./package.json";
 
 export default defineConfig({
-  name: "create-ponder-starknet",
+  name: "create-starknet-ponder",
   bundle: true,
   clean: true,
   entry: ["src/index.ts"],

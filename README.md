@@ -27,7 +27,7 @@ All packages left as original, except for 2 newly starknet only packages:
 | Package | Description |
 |---------|-------------|
 | `starknet-ponder` | Core Starknet indexing framework |
-| `create-ponder-starknet` | CLI tool to bootstrap Starknet indexer projects |
+| `create-starknet-ponder` | CLI tool to bootstrap Starknet indexer projects |
 
 ## Quickstart (Starknet)
 

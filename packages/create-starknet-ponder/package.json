@@ -1,5 +1,5 @@
 {
-  "name": "create-ponder-starknet",
+  "name": "create-starknet-ponder",
   "version": "0.1.0",
   "type": "module",
   "description": "A CLI tool to create Starknet Ponder apps",
@@ -7,11 +7,11 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/yourusername/starknet-ponder",
-    "directory": "packages/create-ponder-starknet"
+    "directory": "packages/create-starknet-ponder"
   },
   "files": ["dist", "templates"],
   "bin": {
-    "create-ponder-starknet": "./dist/index.js"
+    "create-starknet-ponder": "./dist/index.js"
   },
   "scripts": {
     "build": "tsup",

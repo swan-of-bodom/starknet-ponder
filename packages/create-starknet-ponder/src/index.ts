@@ -81,7 +81,7 @@ export async function run({
   log();
   log(
     `Welcome to ${pico.bold(
-      pico.blue("create-ponder-starknet"),
+      pico.blue("create-starknet-ponder"),
     )} – the quickest way to get started with Starknet Ponder!`,
   );
   log();
@@ -227,7 +227,7 @@ export async function run({
             "commit",
             "--no-verify",
             "--message",
-            "chore: initial commit from create-ponder-starknet",
+            "chore: initial commit from create-starknet-ponder",
           ],
           { cwd: projectPath },
         );
