@@ -34,11 +34,11 @@ All packages left as original, except for 2 newly starknet only packages:
 ### 1. Create a new project
 
 ```bash
-npm init ponder-starknet@latest
+npm init starknet-ponder@latest
 # or
-pnpm create ponder-starknet
+pnpm create starknet-ponder
 # or
-yarn create ponder-starknet
+yarn create starknet-ponder
 ```
 
 ### 2. Start the development server
