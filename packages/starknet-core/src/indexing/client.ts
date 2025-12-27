@@ -768,7 +768,7 @@ export const createCachedStarknetJsClient = ({
                   );
 
                   if (allowFailure) {
-                    return { status: "success" as const, result };
+                    return { status: "success" as const, result, error: undefined };
                   }
                   return result;
                 } catch (error) {
@@ -781,6 +781,7 @@ export const createCachedStarknetJsClient = ({
                       return {
                         status: "failure" as const,
                         error: error as Error,
+                        result: undefined,
                       };
                     }
                     common.logger.warn({
@@ -815,6 +816,7 @@ export const createCachedStarknetJsClient = ({
                 return {
                   status: "failure" as const,
                   error: new Error("Exhausted retries without result"),
+                  result: undefined,
                 };
               }
               throw new Error("Exhausted retries without result");

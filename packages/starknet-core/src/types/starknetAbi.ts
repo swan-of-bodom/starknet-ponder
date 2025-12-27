@@ -1,3 +1,5 @@
+// NOTE: Tried to follow Viem types to make the Starknet package as close as possible to /core
+
 export type StarknetAbiParameter = {
   readonly name: string;
   readonly type: string;
@@ -333,14 +335,16 @@ export type ContractFunctionConfig<
 
 /** Success result when allowFailure is true */
 export type ReadContractSuccessResult<TResult> = {
-  status: "success";
+  error?: undefined;
   result: TResult;
+  status: "success";
 };
 
 /** Failure result when allowFailure is true */
 export type ReadContractFailureResult = {
-  status: "failure";
   error: Error;
+  result?: undefined;
+  status: "failure";
 };
 
 /** Result type for a single contract call based on allowFailure */
