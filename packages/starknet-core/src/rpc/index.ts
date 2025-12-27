@@ -198,12 +198,14 @@ const INITIAL_REACTIVATION_DELAY = 100;
 const MAX_REACTIVATION_DELAY = 5_000;
 const BACKOFF_FACTOR = 1.5;
 const LATENCY_WINDOW_SIZE = 500;
+/** Hurdle rate for switching to a faster bucket. */
 const LATENCY_HURDLE_RATE = 0.1;
+/** Exploration rate. */
 const EPSILON = 0.1;
 const INITIAL_MAX_RPS = 100;
 const MIN_RPS = 3;
 const MAX_RPS = 500;
-const RPS_INCREASE_FACTOR = 1.10;
+const RPS_INCREASE_FACTOR = 1.05;
 const RPS_DECREASE_FACTOR = 0.95;
 const RPS_INCREASE_QUALIFIER = 0.9;
 const SUCCESS_MULTIPLIER = 5;

@@ -1,5 +1,8 @@
 import type { Address, Hash, Hex } from "viem";
 
+// NOTE: All types/definitions taken from Alchemy docs: 
+//       https://www.alchemy.com/docs/chains/starknet/starknet-api-endpoints
+
 // ----------------
 // Block
 // ----------------
@@ -340,9 +343,7 @@ export type DeployAccountTransactionReceipt = TransactionReceiptBase & {
   contractAddress: Address;
 };
 
-/**
- * Receipt for an L1_HANDLER transaction.
- */
+/** Receipt for an L1_HANDLER transaction. */
 export type L1HandlerTransactionReceipt = TransactionReceiptBase & {
   type: "L1_HANDLER";
   /** Hash of the L1 message that triggered this transaction */
@@ -351,14 +352,6 @@ export type L1HandlerTransactionReceipt = TransactionReceiptBase & {
 
 /**
  * A confirmed Starknet transaction receipt.
- *
- * This is a flat type with all optional fields for internal use.
- * For type-safe access, use the specific receipt types and type narrowing:
- * - InvokeTransactionReceipt
- * - DeclareTransactionReceipt
- * - DeployTransactionReceipt (has contractAddress)
- * - DeployAccountTransactionReceipt (has contractAddress)
- * - L1HandlerTransactionReceipt (has messageHash)
  *
  * @link https://docs.starknet.io/documentation/architecture_and_concepts/Transactions/
  */

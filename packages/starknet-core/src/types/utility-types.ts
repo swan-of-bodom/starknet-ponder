@@ -166,15 +166,6 @@ export type SafeEventNames<TAbi extends readonly unknown[]> =
     : never;
 
 /**
- * Format event names with contract prefix
- * "Token" + ["Transfer", "Approval"] → "Token:Transfer" | "Token:Approval"
- */
-export type FormatEventNames<
-  TContractName extends string,
-  TEventNames extends string,
-> = `${TContractName}:${TEventNames}`;
-
-/**
  * Find an event in the ABI by its simple name
  * NOTE: replaced infer pattern with [X] extends [never] to preserve literal types
  * TODO: This still needs more checking, for some reason some cairo0 ABIs fail?

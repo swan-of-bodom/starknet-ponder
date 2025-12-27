@@ -3,6 +3,16 @@ import type { Chain, IndexingBuild, SetupEvent } from "@/internal/types.js";
 import type { Event } from "@/internal/types.js";
 import type { RequestParameters } from "@/rpc/index.js";
 import type { SyncStore } from "@/sync-store/index.js";
+import type {
+  ContractFunctionConfigBase,
+  ExtractAllFunctionNames,
+  ExtractInputTypes,
+  ExtractReturnType,
+  GetFunction,
+  ReadContractReturnType,
+  ReadContractsReturnType,
+  RequiredArgs,
+} from "@/types/starknetAbi.js";
 import { dedupe } from "@/utils/dedupe.js";
 import { toLowerCase } from "@/utils/lowercase.js";
 import { orderObject } from "@/utils/order.js";
@@ -26,255 +36,8 @@ import {
   recoverProfilePattern,
 } from "./profile.js";
 
-// ============================================================================
-// ABI Type Extraction
-// ============================================================================
-
-// Cairo1
-type ExtractInterfaceItems<TAbi extends StarknetAbi> = Extract<
-  TAbi[number],
-  { type: "interface"; items: readonly any[] }
->["items"][number];
-
-// Cairo0
-type ExtractTopLevelFunctions<TAbi extends StarknetAbi> = Extract<
-  TAbi[number],
-  { type: "function" }
->;
-
-/** Extract all functions from both interface items (Cairo 1) and top-level (Cairo 0) */
-type ExtractFunctions<TAbi extends StarknetAbi> =
-  | Extract<ExtractInterfaceItems<TAbi>, { type: "function" }>
-  | ExtractTopLevelFunctions<TAbi>;
-
-/** Get a specific function by name */
-type GetFunction<TAbi extends StarknetAbi, TName extends string> = Extract<
-  ExtractFunctions<TAbi>,
-  { name: TName }
->;
-
-/** Extract struct definitions from ABI */
-type ExtractStructs<TAbi extends StarknetAbi> = Extract<
-  TAbi[number],
-  { type: "struct" }
->;
-
-/** Extract enum definitions from ABI */
-type ExtractEnums<TAbi extends StarknetAbi> = Extract<
-  TAbi[number],
-  { type: "enum" }
->;
-
-// ============================================================================
-// Starknet Type Mapping
-// ============================================================================
-
-// TODO: Use types.ts ?
-
-/** Map primitive Starknet/Cairo types to TypeScript types */
-type PrimitiveTypeLookup<T extends string> =
-  // Unsigned integers - starknet.js returns bigint for ALL integer types
-  // https://starknetjs.com/docs/guides/contracts/define_call_message#receive-data-from-a-cairo-contract
-  T extends
-    | "core::integer::u8"
-    | "u8"
-    | "core::integer::u16"
-    | "u16"
-    | "core::integer::u32"
-    | "u32"
-    | "core::integer::u64"
-    | "u64"
-    | "core::integer::u128"
-    | "u128"
-    | "core::integer::u256"
-    | "u256"
-    | "core::integer::i8"
-    | "i8"
-    | "core::integer::i16"
-    | "i16"
-    | "core::integer::i32"
-    | "i32"
-    | "core::integer::i64"
-    | "i64"
-    | "core::integer::i128"
-    | "i128"
-    | "core::felt252"
-    | "felt252"
-    ? bigint
-    : T extends "core::bool" | "bool"
-      ? boolean
-      : // Address types
-        T extends
-            | "core::starknet::contract_address::ContractAddress"
-            | "ContractAddress"
-            | "core::starknet::class_hash::ClassHash"
-            | "ClassHash"
-            | "core::starknet::eth_address::EthAddress"
-            | "EthAddress"
-            | "core::byte_array::ByteArray"
-            | "ByteArray"
-            | "core::bytes_31::bytes31"
-            | "bytes31"
-        ? string
-        : // Option/Result
-          T extends `core::option::Option::<${infer _Inner}>`
-          ? unknown
-          : T extends `core::result::Result::<${infer _Ok}, ${infer _Err}>`
-            ? unknown
-            : // Not a primitive - return never to signal struct/enum lookup needed
-              never;
-
-/** Map Starknet types to TypeScript types with ABI struct/enum lookup */
-type MapStarknetType<
-  TAbi extends StarknetAbi,
-  T extends string,
-> = PrimitiveTypeLookup<T> extends never
-  ? // Handle Array types
-    T extends `core::array::Array::<${infer Inner}>`
-    ? MapStarknetType<TAbi, Inner>[]
-    : T extends `core::array::Span::<${infer Inner}>`
-      ? MapStarknetType<TAbi, Inner>[]
-      : // Try to find struct in ABI
-        Extract<ExtractStructs<TAbi>, { name: T }> extends {
-            members: infer TMembers extends readonly {
-              name: string;
-              type: string;
-            }[];
-          }
-        ? {
-            [M in TMembers[number] as M["name"]]: MapStarknetType<
-              TAbi,
-              M["type"]
-            >;
-          }
-        : // Try to find enum in ABI (return variant names as string union)
-          Extract<ExtractEnums<TAbi>, { name: T }> extends {
-              variants: infer TVariants extends readonly { name: string }[];
-            }
-          ? TVariants[number]["name"]
-          : // Unknown type - fallback to unknown
-            unknown
-  : // Primitive type found
-    PrimitiveTypeLookup<T>;
-
-// ============================================================================
-// Functions
-// ============================================================================
-
-/** Extract input types as a tuple for function arguments */
-type ExtractInputTypes<TAbi extends StarknetAbi, TFunc> = TFunc extends {
-  inputs: infer TInputs extends readonly { name: string; type: string }[];
-}
-  ? {
-      [K in keyof TInputs]: TInputs[K] extends { type: infer T extends string }
-        ? MapStarknetType<TAbi, T>
-        : never;
-    }
-  : readonly [];
-
-/** Extract return type from function outputs */
-type ExtractReturnType<TAbi extends StarknetAbi, TFunc> = TFunc extends {
-  outputs:
-    | readonly [{ type: infer T extends string }]
-    | [{ type: infer T extends string }];
-}
-  ? MapStarknetType<TAbi, T>
-  : TFunc extends { outputs: readonly [] | [] }
-    ? void
-    : unknown;
-
-/** Compute return type for readContract by function name */
-type ReadContractReturnType<
-  TAbi extends StarknetAbi,
-  TFunctionName extends string,
-> = [TFunctionName] extends [ExtractAllFunctionNames<TAbi>]
-  ? ExtractReturnType<TAbi, GetFunction<TAbi, TFunctionName>>
-  : unknown;
-
-// ============================================================================
-// ReadContracts Types (multicall-like batch reads)
-// ============================================================================
-
-/** Single contract call configuration for readContracts */
-export type ContractFunctionConfig<
-  TAbi extends StarknetAbi = StarknetAbi,
-  TFunctionName extends string = string,
-> = {
-  abi: TAbi;
-  address: string;
-  functionName: TFunctionName;
-  args?: readonly unknown[];
-};
-
-/** Success result when allowFailure is true */
-type ReadContractSuccessResult<TResult> = {
-  status: "success";
-  result: TResult;
-};
-
-/** Failure result when allowFailure is true */
-type ReadContractFailureResult = {
-  status: "failure";
-  error: Error;
-};
-
-/** Result type for a single contract call based on allowFailure */
-type ReadContractResult<
-  TResult,
-  TAllowFailure extends boolean,
-> = TAllowFailure extends true
-  ? ReadContractSuccessResult<TResult> | ReadContractFailureResult
-  : TResult;
-
-/** Extract return type from a ContractFunctionConfig */
-type ContractResultType<TContract> = TContract extends ContractFunctionConfig<
-  infer TAbi,
-  infer TFunctionName
->
-  ? ReadContractReturnType<TAbi, TFunctionName>
-  : unknown;
-
-/** Map over contracts array to get tuple of return types */
-type ReadContractsReturnType<
-  TContracts extends readonly ContractFunctionConfig[],
-  TAllowFailure extends boolean,
-> = {
-  [K in keyof TContracts]: ReadContractResult<
-    ContractResultType<TContracts[K]>,
-    TAllowFailure
-  >;
-};
-
-/** Extract view function names from interface items (Cairo 1) */
-type ExtractViewFunctionNames<TAbi extends StarknetAbi> = Extract<
-  ExtractInterfaceItems<TAbi>,
-  { type: "function"; state_mutability: "view" }
->["name"];
-
-/** Extract external function names from interface items (Cairo 1) */
-type ExtractExternalFunctionNames<TAbi extends StarknetAbi> = Extract<
-  ExtractInterfaceItems<TAbi>,
-  { type: "function"; state_mutability: "external" }
->["name"];
-
-/** Extract top-level view function names (Cairo 0) */
-type ExtractTopLevelViewFunctionNames<TAbi extends StarknetAbi> = Extract<
-  ExtractTopLevelFunctions<TAbi>,
-  { state_mutability: "view" }
->["name"];
-
-/** Extract top-level external function names (Cairo 0) */
-type ExtractTopLevelExternalFunctionNames<TAbi extends StarknetAbi> = Extract<
-  ExtractTopLevelFunctions<TAbi>,
-  { state_mutability: "external" }
->["name"];
-
-/** All callable function names (view + external from both Cairo 0 and Cairo 1) */
-type ExtractAllFunctionNames<TAbi extends StarknetAbi> =
-  | ExtractViewFunctionNames<TAbi>
-  | ExtractExternalFunctionNames<TAbi>
-  | ExtractTopLevelViewFunctionNames<TAbi>
-  | ExtractTopLevelExternalFunctionNames<TAbi>;
+// Re-export contract function types for external use
+export type { ContractFunctionConfig } from "@/types/starknetAbi.js";
 
 // ============================================================================
 // Profile Types (for RPC request profiling/caching)
@@ -383,15 +146,17 @@ export type StarknetJsClientActions = {
   readContract: <
     const TAbi extends StarknetAbi,
     const TFunctionName extends ExtractAllFunctionNames<TAbi>,
-  >(params: {
-    abi: TAbi;
-    address: string;
-    functionName: TFunctionName;
-    args?: readonly unknown[];
-  }) => Promise<ReadContractReturnType<TAbi, TFunctionName>>;
+  >(
+    params: {
+      abi: TAbi;
+      address: string;
+      functionName: TFunctionName;
+    } & RequiredArgs<ExtractInputTypes<TAbi, GetFunction<TAbi, TFunctionName>>>,
+  ) => Promise<ReadContractReturnType<TAbi, TFunctionName>>;
 
   /**
-   * Batch multiple contract reads (similar to viem's multicall)
+   * Read multiple contracts. Similar to viem's multicall but still makes 1 request per read since no multicall3.
+   * 
    * @example
    * const [balance, totalSupply, decimals] = await client.readContracts({
    *   contracts: [
@@ -409,10 +174,40 @@ export type StarknetJsClientActions = {
    * if (results[0].status === "success") console.log(results[0].result);
    */
   readContracts: <
-    const TContracts extends readonly ContractFunctionConfig[],
+    const TContracts extends readonly {
+      abi: StarknetAbi;
+      address: string;
+      functionName: ExtractAllFunctionNames<StarknetAbi>;
+      args?: readonly unknown[];
+    }[],
     TAllowFailure extends boolean = true,
   >(params: {
-    contracts: TContracts;
+    contracts: {
+      [K in keyof TContracts]: TContracts[K] extends {
+        abi: infer TAbi extends StarknetAbi;
+        functionName: infer TFn extends string;
+      }
+        ? TFn extends ExtractAllFunctionNames<TAbi>
+          ? ExtractInputTypes<TAbi, GetFunction<TAbi, TFn>> extends readonly []
+            ? {
+                abi: TAbi;
+                address: string;
+                functionName: TFn;
+                args?: undefined;
+              }
+            : {
+                abi: TAbi;
+                address: string;
+                functionName: TFn;
+                args: ExtractInputTypes<TAbi, GetFunction<TAbi, TFn>>;
+              }
+          : {
+              abi: TAbi;
+              address: string;
+              functionName: ExtractAllFunctionNames<TAbi>;
+            }
+        : TContracts[K];
+    };
     allowFailure?: TAllowFailure;
   }) => Promise<ReadContractsReturnType<TContracts, TAllowFailure>>;
 
@@ -926,7 +721,8 @@ export const createCachedStarknetJsClient = ({
               profileConstantLRU.set(event.name, new Set());
             }
 
-            for (const contractConfig of contracts) {
+            for (const contractConfig of contracts as readonly ContractFunctionConfigBase[]) {
+              const contractArgs = contractConfig.args;
               const recordPatternResult = recordProfilePattern({
                 event: event as Event,
                 args: {
@@ -934,8 +730,8 @@ export const createCachedStarknetJsClient = ({
                   abi: contractConfig.abi as any,
                   functionName: contractConfig.functionName,
                   args:
-                    contractConfig.args && contractConfig.args.length > 0
-                      ? [...contractConfig.args]
+                    contractArgs && contractArgs.length > 0
+                      ? [...contractArgs]
                       : undefined,
                 },
                 hints: Array.from(profile.get(event.name)!.values()),
@@ -947,7 +743,7 @@ export const createCachedStarknetJsClient = ({
           }
 
           const results = await Promise.all(
-            contracts.map(async (contractConfig) => {
+            (contracts as readonly ContractFunctionConfigBase[]).map(async (contractConfig) => {
               const { abi, address, functionName, args = [] } = contractConfig;
 
               // Create contract instance
