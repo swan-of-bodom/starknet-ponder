@@ -1122,13 +1122,14 @@ export const createSyncStore = ({
           // @ts-ignore
           log.allKeys = undefined;
         } else {
-          internalLog.keys = [
-            // @ts-ignore
+          internalLog.keys = ([
             log.topic0,
             log.topic1,
             log.topic2,
             log.topic3,
-          ];
+          ] as (string | null | undefined)[]).filter(
+            (k): k is string => k != null,
+          ) as typeof internalLog.keys;
         }
         // @ts-ignore
         log.topic0 = undefined;
@@ -1393,6 +1394,15 @@ export const createSyncStore = ({
             db
               .delete(PONDER_SYNC.factoryAddresses)
               .where(eq(PONDER_SYNC.factoryAddresses.chainId, BigInt(chainId)))
+              .execute(),
+          context,
+        );
+        await tx.wrap(
+          { label: "delete_intervals" },
+          (db) =>
+            db
+              .delete(PONDER_SYNC.intervals)
+              .where(eq(PONDER_SYNC.intervals.chainId, BigInt(chainId)))
               .execute(),
           context,
         );

@@ -185,6 +185,31 @@ const migrations: Record<string, Migration> = {
         .columns(["chain_id", "block_number"])
         .execute();
 
+      // Secondary indexes for query performance
+      await db.schema
+        .createIndex("logs_address_index")
+        .on("logs")
+        .column("address")
+        .execute();
+
+      await db.schema
+        .createIndex("logs_topic0_index")
+        .on("logs")
+        .column("topic0")
+        .execute();
+
+      await db.schema
+        .createIndex("transactions_sender_address_index")
+        .on("transactions")
+        .column("sender_address")
+        .execute();
+
+      await db.schema
+        .createIndex("blocks_timestamp_index")
+        .on("blocks")
+        .columns(["chain_id", "timestamp"])
+        .execute();
+
       // ============================================
       // SYNC INTERVALS
       // ============================================
