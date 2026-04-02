@@ -18,7 +18,6 @@ import type {
   StarknetEvent,
   StarknetGetEventsResponse,
 } from "@/rpc/index.js";
-import type { Logger } from "@/internal/logger.js";
 import { toHex64, hexToBigInt, zeroHash } from "@/utils/hex.js";
 import type { Hash, Hex } from "@/utils/hex.js";
 import { PG_BIGINT_MAX, PG_INTEGER_MAX } from "@/utils/pg.js";
@@ -104,19 +103,16 @@ export const _starknet_getEvents = async (
     fromBlock,
     toBlock,
     keys,
-    logger,
   }: {
-    address: string;
+    address: string | string[];
     fromBlock: number;
     toBlock: number;
     keys?: string[][];
-    logger?: Logger;
   },
 ): Promise<SyncLog[]> => {
   try {
     const allEvents: SyncLog[] = [];
     let continuationToken: string | undefined = undefined;
-    let pageCount = 0;
     const blockLogIndexMap = new Map<number, number>();
 
     // Handles pagination between block ranges
@@ -143,20 +139,9 @@ export const _starknet_getEvents = async (
         return adaptStarknetEventToSyncLog(event, logIndex);
       });
       allEvents.push(...processedEvents);
-      pageCount++;
       continuationToken = result.continuation_token;
     } while (continuationToken);
 
-    logger;
-    // DEBUG: Log pagination stats if any
-    // if (pageCount > 1 && allEvents.length > 0 && logger) {
-    //   logger.info({
-    //     msg: "Fetched events with pagination",
-    //     event_count: allEvents.length,
-    //     page_count: pageCount,
-    //     block_range: `[${fromBlock},${toBlock}]`,
-    //   });
-    // }
     return allEvents;
   } catch (error: any) {
     throw new RpcProviderError(`Failed to fetch events: ${error.message}`);

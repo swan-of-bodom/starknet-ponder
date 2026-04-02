@@ -234,7 +234,6 @@ export const createRealtimeSync = (
             fromBlock: blockNumber,
             toBlock: blockNumber,
             keys,
-            logger: args.common.logger,
           });
 
           allLogs.push(...logs);
