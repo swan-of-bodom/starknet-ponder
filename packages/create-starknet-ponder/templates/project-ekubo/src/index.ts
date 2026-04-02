@@ -1,7 +1,7 @@
 import { ponder } from "ponder:registry";
 import schema from "ponder:schema";
-import { decodeShortString } from "starkweb2/utils";
 import { erc20ABI } from "../abis/erc20ABI";
+import { CairoFelt252 } from "starknet";
 
 ponder.on("EkuboCore:PoolInitialized", async ({ event, context }) => {
   const { pool_key, initial_tick, sqrt_ratio } = event.args;
@@ -19,18 +19,20 @@ ponder.on("EkuboCore:PoolInitialized", async ({ event, context }) => {
 
   await context.db.insert(schema.token).values({
     id: pool_key.token0,
-    name: decodeShortString(name0.data),
-    symbol: decodeShortString(symbol0.data),
-    decimals: decimals0.data
+    name: new CairoFelt252(name0.result!).decodeUtf8(),
+    symbol: new CairoFelt252(symbol0.result!).decodeUtf8(),
+    decimals: Number(decimals0.result),
   }).onConflictDoNothing();
+
 
   await context.db.insert(schema.token).values({
     id: pool_key.token1,
-    name: decodeShortString(name1.data),
-    symbol: decodeShortString(symbol1.data),
-    decimals: decimals1.data
+    name: new CairoFelt252(name1.result!).decodeUtf8(),
+    symbol: new CairoFelt252(symbol1.result!).decodeUtf8(),
+    decimals: Number(decimals1.result),
   }).onConflictDoNothing();
-});
+})
+
 
 ponder.on("EkuboCore:ProtocolFeesPaid", async ({ context, event}) => {
   //console.log("Protocl Fees Paid")
@@ -51,4 +53,5 @@ ponder.on("EkuboCore:ClassHashReplaced", async ({ context, event}) => {
 ponder.on("EkuboCore:Swapped", async ({ context, event }) => {
   //console.log("Swapped")
 })
+
 
