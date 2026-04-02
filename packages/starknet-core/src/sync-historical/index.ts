@@ -179,9 +179,23 @@ export const createHistoricalSync = (
       topics.pop();
     }
 
-    // Pre-compute keys array once
-    const filteredTopics = topics.filter((t) => t !== null).flat() as string[];
-    const keys = filteredTopics.length > 0 ? [filteredTopics] : [];
+    // Map each topic position to its own sub-array in keys.
+    // starknet_getEvents keys format: [[key0_values], [key1_values], ...]
+    // where each sub-array filters the corresponding key position.
+    const keys: string[][] = [];
+    for (const topic of topics) {
+      if (topic === null) {
+        // null means "match any" — use empty array for this position
+        keys.push([]);
+      } else {
+        const values = Array.isArray(topic) ? topic : [topic];
+        keys.push(values);
+      }
+    }
+    // Remove trailing empty arrays (no filter needed for trailing positions)
+    while (keys.length > 0 && keys[keys.length - 1]!.length === 0) {
+      keys.pop();
+    }
 
     // Batch large arrays of addresses, handling arrays that are empty
     let addressBatches: (Address | Address[] | undefined)[];
@@ -208,11 +222,10 @@ export const createHistoricalSync = (
       intervals.flatMap((interval) =>
         addressBatches.map((address) =>
           _starknet_getEvents(args.rpc, {
-            address: address as any,
+            address: address as string | string[],
             keys,
             fromBlock: interval[0],
             toBlock: interval[1],
-            logger: args.common.logger,
           }).catch((error) => {
             const getLogsErrorResponse = getLogsRetryHelper({
               params: [
