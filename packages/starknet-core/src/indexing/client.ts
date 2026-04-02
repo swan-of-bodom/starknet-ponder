@@ -303,8 +303,10 @@ const nonBlockDependentMethods = new Set([
   "starknet_getStateUpdate",
 ]);
 
-/** RPC responses that are not cached. */
-const UNCACHED_RESPONSES = [[], null] as unknown[];
+/** Check if a response should not be cached (null or empty array). */
+const isUncacheableResponse = (response: unknown): boolean =>
+  response === null ||
+  (Array.isArray(response) && response.length === 0);
 
 export const getCacheKey = (request: RequestParameters) => {
   return toLowerCase(JSON.stringify(orderObject(request)));
@@ -508,7 +510,7 @@ export const createCachedStarknetJsClient = ({
           const response = await rpc.request(body, context);
 
           // Cache the response
-          if (!UNCACHED_RESPONSES.includes(response)) {
+          if (!isUncacheableResponse(response)) {
             // Extract block number from request for cache keying
             const blockIdParam = getBlockIdParam(body);
             const encodedBlockNumber =
@@ -1166,24 +1168,16 @@ export const getBlockIdParam = (request: RequestParameters) => {
   };
 
   switch (request.method as string) {
-    // params: { request: {...}, block_id: {...} } (named params)
+    // All Starknet RPC methods use named params with block_id
     case "starknet_call":
-      blockId = getBlockId((request.params as any)?.block_id);
-      break;
-
-    // params: [contract_address, key, block_id]
     case "starknet_getStorageAt":
-      blockId = getBlockId(request.params?.[2]);
-      break;
-
-    // These methods have block_id as the first parameter
     case "starknet_getNonce":
     case "starknet_getClassAt":
     case "starknet_getClassHashAt":
     case "starknet_getBlockWithTxs":
     case "starknet_getBlockWithTxHashes":
     case "starknet_getBlockTransactionCount":
-      blockId = getBlockId(request.params?.[0]);
+      blockId = getBlockId((request.params as any)?.block_id);
       break;
   }
 
