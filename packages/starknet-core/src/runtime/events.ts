@@ -399,6 +399,12 @@ export const buildEvents = ({
   transactionsIndex = 0;
   transactionReceiptsIndex = 0;
 
+  // Build a Map for O(1) transaction lookup by hash (Starknet events don't have reliable transactionIndex)
+  const txByHash = new Map<string, InternalTransaction>();
+  for (const tx of transactions) {
+    txByHash.set(tx.hash, tx);
+  }
+
   for (const log of logs) {
     const blockNumber = log.blockNumber;
     const transactionIndex = log.transactionIndex;
@@ -420,13 +426,8 @@ export const buildEvents = ({
 
     // For Starknet, match by transactionHash since starknet_getEvents
     // doesn't return accurate transactionIndex
-    let transaction: InternalTransaction | undefined;
-    if (log.transactionHash) {
-      transaction = transactions.find(
-        (tx) =>
-          tx.blockNumber === blockNumber && tx.hash === log.transactionHash,
-      );
-    }
+    const transaction: InternalTransaction | undefined =
+      log.transactionHash ? txByHash.get(log.transactionHash) : undefined;
 
     // Note: transaction can be undefined if the transaction wasn't fetched.
 
