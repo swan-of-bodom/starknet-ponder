@@ -123,6 +123,33 @@ function convertAddressesToHex(
   return result;
 }
 
+const abiCache = new WeakMap<
+  StarknetAbi,
+  {
+    normalizedAbi: StarknetAbi;
+    abiEvents: ReturnType<typeof events.getAbiEvents>;
+    abiStructs: ReturnType<typeof CallData.getAbiStruct>;
+    abiEnums: ReturnType<typeof CallData.getAbiEnum>;
+    parser: ReturnType<typeof createAbiParser>;
+  }
+>();
+
+function getParsedAbi(fullAbi: StarknetAbi) {
+  let cached = abiCache.get(fullAbi);
+  if (!cached) {
+    const normalizedAbi = normalizeLegacyEventAbi(fullAbi);
+    cached = {
+      normalizedAbi,
+      abiEvents: events.getAbiEvents(normalizedAbi),
+      abiStructs: CallData.getAbiStruct(normalizedAbi),
+      abiEnums: CallData.getAbiEnum(normalizedAbi),
+      parser: createAbiParser(normalizedAbi),
+    };
+    abiCache.set(fullAbi, cached);
+  }
+  return cached;
+}
+
 /**
  * Decode a Starknet event log using starknet.js parseEvents.
  */
@@ -139,15 +166,11 @@ export function decodeEventLog({
   if (!fullAbi?.length) return;
 
   try {
-    const normalizedAbi = normalizeLegacyEventAbi(fullAbi);
+    const { normalizedAbi, abiEvents, abiStructs, abiEnums, parser } =
+      getParsedAbi(fullAbi);
     const normalizedKeys = (keys as string[])
       .filter((k): k is string => k != null)
       .map(stripLeadingZeros);
-
-    const abiEvents = events.getAbiEvents(normalizedAbi);
-    const abiStructs = CallData.getAbiStruct(normalizedAbi);
-    const abiEnums = CallData.getAbiEnum(normalizedAbi);
-    const parser = createAbiParser(normalizedAbi);
 
     const parsedEvents = events.parseEvents(
       [
